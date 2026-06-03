@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { auth, firestore, functionsClient } from "../../firebase";
+import { auth, firestore } from "../../firebase";
+import callApi from "../callApi";
 
 const adminAnalyticsSchema = z.object({
   range: z.object({
@@ -217,14 +218,12 @@ function mapDocs(snapshot, schema) {
 }
 
 export async function getAdminAnalytics(rangePreset) {
-  const callable = functionsClient.httpsCallable("getAdminAnalytics");
-  const result = await callable({ rangePreset: parseRangePreset(rangePreset) });
+  const result = await callApi("getAdminAnalytics", { rangePreset: parseRangePreset(rangePreset) });
   return adminAnalyticsSchema.parse(result.data);
 }
 
 export async function getOwnerAnalytics(rangePreset) {
-  const callable = functionsClient.httpsCallable("getOwnerAnalytics");
-  const result = await callable({ rangePreset: parseRangePreset(rangePreset) });
+  const result = await callApi("getOwnerAnalytics", { rangePreset: parseRangePreset(rangePreset) });
   return ownerAnalyticsSchema.parse(result.data);
 }
 
@@ -285,8 +284,7 @@ export async function createOwnerAccount(input) {
       bankAccountNumber: z.string().optional().default(""),
     })
     .parse(input);
-  const callable = functionsClient.httpsCallable("createOwnerAccount");
-  const result = await callable(payload);
+  const result = await callApi("createOwnerAccount", payload);
   return z.object({ ownerId: z.string(), userId: z.string(), email: z.string() }).parse(result.data);
 }
 
@@ -307,8 +305,7 @@ export async function upsertParking(input) {
       lng: z.number().optional(),
     })
     .parse(input);
-  const callable = functionsClient.httpsCallable("upsertParking");
-  const result = await callable(payload);
+  const result = await callApi("upsertParking", payload);
   return z.object({ parkingId: z.string(), status: z.string() }).parse(result.data);
 }
 
@@ -316,15 +313,13 @@ export async function assignOperatorToParking(input) {
   const payload = z
     .object({ operatorUid: z.string().min(1), parkingId: z.string().min(1), assign: z.boolean().default(true) })
     .parse(input);
-  const callable = functionsClient.httpsCallable("assignOperatorToParking");
-  const result = await callable(payload);
+  const result = await callApi("assignOperatorToParking", payload);
   return z.object({ operatorUid: z.string(), parkingId: z.string(), assign: z.boolean() }).parse(result.data);
 }
 
 export async function adminArchiveOwner(input) {
   const payload = z.object({ ownerId: z.string().min(1), reason: z.string().optional() }).parse(input);
-  const callable = functionsClient.httpsCallable("adminArchiveOwner");
-  const result = await callable(payload);
+  const result = await callApi("adminArchiveOwner", payload);
   return z
     .object({
       ownerId: z.string(),
@@ -337,8 +332,7 @@ export async function adminArchiveOwner(input) {
 
 export async function adminRestoreOwner(input) {
   const payload = z.object({ ownerId: z.string().min(1) }).parse(input);
-  const callable = functionsClient.httpsCallable("adminRestoreOwner");
-  const result = await callable(payload);
+  const result = await callApi("adminRestoreOwner", payload);
   return z
     .object({
       ownerId: z.string(),
@@ -351,8 +345,7 @@ export async function adminRestoreOwner(input) {
 
 export async function updateOwnerPaymentDetails(input) {
   const payload = z.object({ phone: z.string().optional(), bankAccountNumber: z.string().optional() }).parse(input || {});
-  const callable = functionsClient.httpsCallable("ownerUpdatePaymentDetails");
-  const result = await callable(payload);
+  const result = await callApi("ownerUpdatePaymentDetails", payload);
   return z
     .object({ ownerId: z.string(), phone: z.string().nullable(), bankAccountNumber: z.string().nullable(), updatedAtMs: z.number() })
     .parse(result.data);
@@ -368,8 +361,7 @@ export async function createOwnerOperator(input) {
       assignedParkingIds: z.array(z.string().min(1)).min(1),
     })
     .parse(input);
-  const callable = functionsClient.httpsCallable("ownerCreateOperator");
-  const result = await callable(payload);
+  const result = await callApi("ownerCreateOperator", payload);
   return z
     .object({ operatorUid: z.string(), ownerId: z.string(), assignedParkingIds: z.array(z.string()), status: z.string() })
     .parse(result.data);
@@ -379,15 +371,13 @@ export async function updateOwnerOperatorAssignments(input) {
   const payload = z
     .object({ operatorUid: z.string().min(1), assignedParkingIds: z.array(z.string().min(1)).min(1) })
     .parse(input);
-  const callable = functionsClient.httpsCallable("ownerUpdateOperatorAssignments");
-  const result = await callable(payload);
+  const result = await callApi("ownerUpdateOperatorAssignments", payload);
   return z.object({ operatorUid: z.string(), assignedParkingIds: z.array(z.string()) }).parse(result.data);
 }
 
 export async function setOwnerOperatorStatus(input) {
   const payload = z.object({ operatorUid: z.string().min(1), status: z.enum(["active", "inactive"]) }).parse(input);
-  const callable = functionsClient.httpsCallable("ownerSetOperatorStatus");
-  const result = await callable(payload);
+  const result = await callApi("ownerSetOperatorStatus", payload);
   return z.object({ operatorUid: z.string(), status: z.enum(["active", "inactive"]) }).parse(result.data);
 }
 

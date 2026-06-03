@@ -4,7 +4,8 @@ import { MapContainer, Marker, TileLayer, Circle } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { toast } from "sonner";
-import { auth, firestore, functionsClient } from "../firebase";
+import { auth, firestore } from "../firebase";
+import callApi from "../lib/callApi";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -154,8 +155,7 @@ function OperatorHome() {
 
     const loadPendingPayments = async () => {
       try {
-        const callable = functionsClient.httpsCallable("listPendingPaymentsForOperator");
-        const response = await callable({ parkingId: selectedParkingId });
+        const response = await callApi("listPendingPaymentsForOperator", { parkingId: selectedParkingId });
         if (!mounted) return;
         setPendingPayments(Array.isArray(response?.data?.pendingPayments) ? response.data.pendingPayments : []);
         setPendingPaymentsError("");
@@ -276,8 +276,7 @@ function OperatorHome() {
     const refreshQr = async () => {
       try {
         setQrLoading(true);
-        const callable = functionsClient.httpsCallable("createParkingCheckInToken");
-        const response = await callable({ parkingId: selectedParkingId });
+        const response = await callApi("createParkingCheckInToken", { parkingId: selectedParkingId });
         if (!active) return;
         setQrPayload(response.data);
         setQrError("");
@@ -301,8 +300,7 @@ function OperatorHome() {
   const callAction = async (name, payload) => {
     setLoadingAction(name);
     try {
-      const callable = functionsClient.httpsCallable(name);
-      const response = await callable(payload);
+      const response = await callApi(name, payload);
       toast.success(`${name} success.`);
       return response.data;
     } catch (err) {
@@ -440,8 +438,7 @@ function OperatorHome() {
     if (!searchResult) return;
     setLoadingAction("checkOutVehicle");
     try {
-      const callable = functionsClient.httpsCallable("checkOutVehicle");
-      const response = await callable({
+      const response = await callApi("checkOutVehicle", {
         parkingId: selectedParkingId,
         plateNumber: searchResult.plateNumber,
         paymentMethod: checkoutPaymentMethod
@@ -467,8 +464,7 @@ function OperatorHome() {
   const resolvePendingPaymentForSession = async (sessionId) => {
     setLoadingAction("getPendingPaymentForSession");
     try {
-      const callable = functionsClient.httpsCallable("getPendingPaymentForSession");
-      const response = await callable({ sessionId });
+      const response = await callApi("getPendingPaymentForSession", { sessionId });
       const pendingPayment = response?.data?.pendingPayment || null;
       if (!pendingPayment) {
         toast.error("No pending payment found for this session.");

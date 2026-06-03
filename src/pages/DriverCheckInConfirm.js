@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle, Clock, Home, QrCode, XCircle } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { firestore, functionsClient } from "../firebase";
+import { firestore } from "../firebase";
+import callApi from "../lib/callApi";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -65,8 +66,7 @@ function DriverCheckInConfirm() {
 
     setLoading(true);
     try {
-      const callable = functionsClient.httpsCallable("confirmCheckInFromQr");
-      const response = await callable({ token: token || codeParam, plateNumber });
+      const response = await callApi("confirmCheckInFromQr", { token: token || codeParam, plateNumber });
       setRequestId(response.data.requestId);
       setRequestStatus(response.data.status);
       toast.success("Check-in request sent. Please wait for operator approval.");

@@ -4,7 +4,8 @@ import { QRCodeSVG } from "qrcode.react";
 import * as qrLib from "qrcode";
 import { Circle, GoogleMap, Marker, useJsApiLoader } from "@react-google-maps/api";
 import { toast } from "sonner";
-import { auth, firestore, functionsClient } from "../firebase";
+import { auth, firestore } from "../firebase";
+import callApi from "../lib/callApi";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -165,8 +166,7 @@ function DriverHome() {
 
     const loadPending = async () => {
       try {
-        const callable = functionsClient.httpsCallable("listPendingPaymentsForDriver");
-        const response = await callable({});
+        const response = await callApi("listPendingPaymentsForDriver", {});
         if (!mounted) return;
         const list = Array.isArray(response?.data?.pendingPayments) ? response.data.pendingPayments : [];
         setPendingPaymentRequests(list);
@@ -201,8 +201,7 @@ function DriverHome() {
 
     const expirePast = async () => {
       try {
-        const callable = functionsClient.httpsCallable("expireBookingsManual");
-        await callable({});
+        await callApi("expireBookingsManual", {});
       } catch (_) {
         // silently ignore — function may not be deployed locally
       }
@@ -275,8 +274,7 @@ function DriverHome() {
         return;
       }
 
-      const callable = functionsClient.httpsCallable("createBooking");
-      const response = await callable({
+      const response = await callApi("createBooking", {
         parkingId: selectedParkingId,
         plateNumber,
         startTimeMs: startMs,
@@ -401,8 +399,7 @@ function DriverHome() {
   const payWithWalletAndCheckout = async (session, method = "telebirr") => {
     setCheckoutLoadingId(session.id);
     try {
-      const callable = functionsClient.httpsCallable("driverCheckOutVehicle");
-      const response = await callable({
+      const response = await callApi("driverCheckOutVehicle", {
         parkingId: session.parkingId,
         plateNumber: session.plateNumber,
         paymentMethod: method
@@ -427,8 +424,7 @@ function DriverHome() {
 
     setLoadingPaymentDestination(true);
     try {
-      const callable = functionsClient.httpsCallable("getParkingPaymentDetails");
-      const response = await callable({ parkingId: session.parkingId });
+      const response = await callApi("getParkingPaymentDetails", { parkingId: session.parkingId });
       setPaymentDestination({
         phone: response?.data?.phone || "",
         bankAccountNumber: response?.data?.bankAccountNumber || "",
@@ -451,8 +447,7 @@ function DriverHome() {
     if (!checkoutSession) return;
     setCheckoutLoadingId(checkoutSession.id);
     try {
-      const callable = functionsClient.httpsCallable("submitManualPayment");
-      const response = await callable({
+      const response = await callApi("submitManualPayment", {
         parkingId: checkoutSession.parkingId,
         plateNumber: checkoutSession.plateNumber,
         method: paymentMethod,

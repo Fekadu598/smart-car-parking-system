@@ -10,7 +10,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "firebase": "^12.12.1",
-    "firebase-admin": "^13.8.0",
+    "firebase-admin": "^13.10.0",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
