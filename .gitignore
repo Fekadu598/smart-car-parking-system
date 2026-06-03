@@ -9,3 +9,6 @@ firebase-debug.log
 !firestore.indexes.json
 !vercel.json
 !skills-lock.json
+!data.json
+
+.vercel

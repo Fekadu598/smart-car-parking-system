@@ -1,0 +1,18 @@
+{
+  "Parking_Lots": {
+    "lot_01": {
+      "name": "ቦሌ ኤድናሞል ፓርኪንግ",
+      "lat": 8.9984,
+      "lng": 38.7846,
+      "totalSpots": 50,
+      "availableSpots": 12
+    },
+    "lot_02": {
+      "name": "ፒያሳ ማዘጋጃ ፓርኪንግ",
+      "lat": 9.0354,
+      "lng": 38.7523,
+      "totalSpots": 30,
+      "availableSpots": 5
+    }
+  }
+}
