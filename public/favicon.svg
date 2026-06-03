@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Enderase favicon</title>
+  <desc id="desc">Orange emblem with a white P and car silhouette.</desc>
+  <defs>
+    <linearGradient id="orangeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff7a18" />
+      <stop offset="100%" stop-color="#f55b00" />
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" fill="#ffffff" />
+  <circle cx="128" cy="100" r="82" fill="url(#orangeGrad)" />
+  <path d="M108 59h36c20 0 36 15 36 33s-16 33-36 33h-14l-5 27h-24l13-93zm21 20-5 42h12c12 0 21-8 21-21 0-12-9-21-21-21h-7z" fill="#ffffff" />
+  <g transform="translate(45 134)">
+    <path d="M18 22c12-10 29-17 47-21 30-6 64-7 94-4 15 2 27 7 36 14 7 6 11 11 14 18 4 8-2 15-10 15H27c-13 0-19-12-9-22z" fill="#f1732c" />
+    <circle cx="49" cy="48" r="15" fill="#ffffff" stroke="#d85a14" stroke-width="4" />
+    <circle cx="165" cy="48" r="15" fill="#ffffff" stroke="#d85a14" stroke-width="4" />
+    <path d="M24 24c11-7 26-12 44-15 29-5 61-5 89-2 16 2 28 5 38 11" fill="none" stroke="#ffffff" stroke-width="4" stroke-linecap="round" opacity="0.95" />
+  </g>
+</svg>

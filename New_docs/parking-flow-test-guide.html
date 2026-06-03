@@ -1,0 +1,736 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Car Parking - Flow Change Map and Test Guide</title>
+  <style>
+    :root {
+      --bg: #07111f;
+      --bg-soft: #0d1726;
+      --card: rgba(15, 23, 42, 0.78);
+      --card-2: rgba(8, 15, 27, 0.72);
+      --line: rgba(148, 163, 184, 0.18);
+      --text: #e5eefb;
+      --muted: #9fb1c8;
+      --accent: #60a5fa;
+      --accent-2: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      --radius: 22px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(96, 165, 250, 0.16), transparent 30%),
+        radial-gradient(circle at 85% 12%, rgba(34, 197, 94, 0.14), transparent 26%),
+        linear-gradient(180deg, #07111f 0%, #081320 48%, #050b14 100%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 18px 72px;
+    }
+
+    .hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 30px;
+      padding: 28px;
+      background: linear-gradient(135deg, rgba(14, 27, 47, 0.94), rgba(9, 17, 30, 0.92));
+      box-shadow: var(--shadow);
+      margin-bottom: 22px;
+    }
+
+    .hero::after {
+      content: "";
+      position: absolute;
+      inset: auto -10% -45% auto;
+      width: 360px;
+      height: 360px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(96, 165, 250, 0.22), transparent 68%);
+      pointer-events: none;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(96, 165, 250, 0.12);
+      border: 1px solid rgba(96, 165, 250, 0.2);
+      color: #bfdbfe;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 14px 0 10px;
+      font-size: clamp(30px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 920px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+    }
+
+    .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .card.soft { background: var(--card-2); }
+
+    .card h2, .card h3 {
+      margin: 0 0 10px;
+      letter-spacing: -0.02em;
+    }
+
+    .card h2 { font-size: 22px; }
+    .card h3 { font-size: 18px; }
+
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; line-height: 1.65; }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text);
+    }
+
+    .pill.blue { border-color: rgba(96, 165, 250, 0.25); background: rgba(59, 130, 246, 0.11); color: #bfdbfe; }
+    .pill.green { border-color: rgba(34, 197, 94, 0.25); background: rgba(34, 197, 94, 0.12); color: #bbf7d0; }
+    .pill.amber { border-color: rgba(245, 158, 11, 0.25); background: rgba(245, 158, 11, 0.14); color: #fde68a; }
+    .pill.red { border-color: rgba(239, 68, 68, 0.25); background: rgba(239, 68, 68, 0.12); color: #fecaca; }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.72;
+    }
+
+    .list li { margin-bottom: 8px; }
+
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 860px;
+      background: rgba(5, 11, 20, 0.38);
+    }
+
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      padding: 14px 14px;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(10, 18, 31, 0.96);
+      color: #dbeafe;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    td .muted { display: block; margin-top: 4px; }
+
+    .timeline {
+      display: grid;
+      gap: 14px;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(96, 165, 250, 0.24), rgba(59, 130, 246, 0.16));
+      border: 1px solid rgba(96, 165, 250, 0.28);
+      color: #dbeafe;
+      font-weight: 900;
+      font-size: 18px;
+    }
+
+    .step h3 { margin-top: 2px; }
+    .step p { margin: 8px 0 0; color: var(--muted); line-height: 1.7; }
+
+    .note {
+      border-left: 4px solid var(--accent);
+      background: rgba(96, 165, 250, 0.08);
+      padding: 14px 16px;
+      border-radius: 14px;
+      color: #dbeafe;
+      line-height: 1.7;
+    }
+
+    .note.warn {
+      border-left-color: var(--warn);
+      background: rgba(245, 158, 11, 0.09);
+      color: #fde68a;
+    }
+
+    .note.danger {
+      border-left-color: var(--danger);
+      background: rgba(239, 68, 68, 0.08);
+      color: #fecaca;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    details + details { margin-top: 12px; }
+
+    summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: #eff6ff;
+      list-style: none;
+    }
+
+    summary::-webkit-details-marker { display: none; }
+
+    .anchor-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .anchor-bar a {
+      color: #e2e8f0;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 10px 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .codebox {
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 16px;
+      background: #020817;
+      padding: 14px 16px;
+      overflow-x: auto;
+      color: #dbeafe;
+      font-size: 13px;
+      line-height: 1.6;
+      white-space: pre;
+    }
+
+    .footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (max-width: 960px) {
+      .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+      .step { grid-template-columns: 1fr; }
+      .step-num { width: 54px; height: 54px; }
+      .hero { padding: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Web App flow guide</div>
+      <h1>What changed, and how to test the full booking to checkout flow</h1>
+      <p>
+        This page is a local walkthrough for the current Web App changes in <strong>bookings</strong>, <strong>check-in</strong>, <strong>checkout</strong>, and <strong>payment simulation</strong>.
+        It explains what the new flow does compared with the older behavior, then gives you an exact test plan you can follow step by step.
+      </p>
+      <div class="pill-row">
+        <span class="pill blue">Reservation code + spot allocation</span>
+        <span class="pill green">QR and manual check-in</span>
+        <span class="pill amber">Manual payment approval queue</span>
+        <span class="pill red">Wallet and cash checkout paths</span>
+      </div>
+      <div class="anchor-bar">
+        <a href="#changes">What changed</a>
+        <a href="#setup">How to run it</a>
+        <a href="#flow">Full flow</a>
+        <a href="#firestore">What to watch in Firestore</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+      </div>
+    </section>
+
+    <section class="grid grid-2" id="changes">
+      <div class="card">
+        <h2>Short version</h2>
+        <p class="muted small">
+          The app used to behave more like a basic booking-and-exit demo. It now behaves like a real parking operations flow with separate responsibilities for the driver and the operator.
+        </p>
+        <div class="pill-row" style="margin-top:14px;">
+          <span class="pill">Driver reserves a spot</span>
+          <span class="pill">Operator approves entry</span>
+          <span class="pill">Driver or operator closes the session</span>
+          <span class="pill">Payment can be wallet, cash, bank, or phone</span>
+        </div>
+      </div>
+
+      <div class="card soft">
+        <h2>Big functional shifts</h2>
+        <ul class="list">
+          <li><strong>Reservations now carry a hold fee.</strong> A booking reserves a specific spot, deducts a reservation fee, and generates a reservation code.</li>
+          <li><strong>Check-in is now explicit.</strong> The operator can check in a vehicle with a reservation code, plate number, or a walk-in flag.</li>
+          <li><strong>QR check-in was added.</strong> The operator can generate a QR deep link, the driver confirms the plate, and the operator approves the request.</li>
+          <li><strong>Checkout has multiple payment paths.</strong> The operator can close a session with cash or wallet deduction, and the driver can submit a manual bank or phone payment request.</li>
+          <li><strong>Receipts are now generated at checkout.</strong> The session stores fare, tax, duration, payment method, and the final payment record.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="grid grid-3" style="margin-top:18px;">
+      <div class="card">
+        <h3>Before</h3>
+        <p class="muted small">
+          The flow was much flatter: booking, check-in, and checkout were not as tightly separated, and there was less visible state for approvals, spot assignment, and payment handling.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Now</h3>
+        <p class="muted small">
+          The system tracks a real chain of state transitions across <strong>bookings</strong>, <strong>check-in requests</strong>, <strong>sessions</strong>, <strong>payment requests</strong>, and <strong>payments</strong>.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Why it matters</h3>
+        <p class="muted small">
+          You can now test the app as a full operations flow instead of only verifying a page. The screens and backend data change together, which makes debugging much easier.
+        </p>
+      </div>
+    </section>
+
+    <section class="card" id="setup" style="margin-top:18px;">
+      <h2>How to run it locally</h2>
+      <p class="muted small">
+        Open a terminal in the <strong>Web App</strong> folder and start the front end plus the Firebase emulator path used by the app.
+      </p>
+      <div class="grid grid-2" style="margin-top:14px;">
+        <div>
+          <h3>Terminal 1</h3>
+          <div class="codebox">npm run firebase:emulators</div>
+          <p class="muted small">This starts the Functions emulator on port 5001. The app is already wired to use it in development.</p>
+        </div>
+        <div>
+          <h3>Terminal 2</h3>
+          <div class="codebox">npm start</div>
+          <p class="muted small">This starts the React app on http://localhost:3000.</p>
+        </div>
+      </div>
+      <div class="note warn" style="margin-top:14px;">
+        Important: the current frontend automatically connects Functions to the local emulator in development, but it does not show a separate Firestore emulator hookup in the client bootstrap. For a fully isolated run, keep that in mind while testing.
+      </div>
+      <div class="grid grid-3" style="margin-top:14px;">
+        <div class="card soft">
+          <h3>Expected console message</h3>
+          <p class="muted small">Using Functions emulator at localhost:5001</p>
+        </div>
+        <div class="card soft">
+          <h3>Useful commands</h3>
+          <p class="muted small">firebase login, firebase use digital-parking-f9d2c</p>
+        </div>
+        <div class="card soft">
+          <h3>Role accounts</h3>
+          <p class="muted small">You will need at least one driver account and one operator account to test the end-to-end path.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="flow" style="margin-top:18px;">
+      <h2>Full flow: booking to check-in to checkout to payment</h2>
+      <p class="muted small">
+        The best way to test the new behavior is to follow the flow below in order. Each step also notes what should change in the UI and backend.
+      </p>
+
+      <div class="timeline" style="margin-top:16px;">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div>
+            <h3>Driver creates a booking</h3>
+            <p>
+              On the driver home screen, choose a parking lot, enter a plate number, and reserve a time window. The booking now creates a reservation code, assigns a specific spot, and charges the reservation hold fee.
+            </p>
+            <p class="muted small">
+              Expected result: the driver sees a success toast, the spot is reserved, and the booking appears under active reservations with the generated reservation code.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">2</div>
+          <div>
+            <h3>Operator sees the reserved slot</h3>
+            <p>
+              The operator dashboard now shows reserved and occupied spots, along with a live lot status list. The spot assigned during booking should show as reserved instead of available.
+            </p>
+            <p class="muted small">
+              Expected result: parking counters change, the reserved spot becomes visible, and the reservation code is shown in the operator view.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">3</div>
+          <div>
+            <h3>Driver check-in by QR or operator approval</h3>
+            <p>
+              The operator can generate a QR deep link. The driver opens the check-in confirmation page, enters the plate number, and submits the request. The operator then approves that check-in request from the pending queue.
+            </p>
+            <p class="muted small">
+              Alternative manual route: the operator can use the manual check-in form and enter the reservation code or plate number directly. Walk-ins are also supported if the walk-in checkbox is enabled.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">4</div>
+          <div>
+            <h3>Session starts</h3>
+            <p>
+              Once the operator approves the check-in, a session is created. The booking status moves from reserved to checked in, the parking counters change, and the lot now has an active session for that plate.
+            </p>
+            <p class="muted small">
+              Expected result: the operator sees the vehicle in the active sessions list, and the driver can see the active session from the driver dashboard.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">5</div>
+          <div>
+            <h3>Checkout begins</h3>
+            <p>
+              At exit time, the operator can search for the active vehicle by plate and choose a checkout method. The new flow supports cash, wallet deduction, or a manual payment request submitted by the driver first.
+            </p>
+            <p class="muted small">
+              The checkout invoice now calculates duration, billed hours, base fare, tax, and final amount due before the session closes.
+            </p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">6</div>
+          <div>
+            <h3>Payment is finalized</h3>
+            <p>
+              The system writes a payment record and closes the session. If wallet deduction is used, the driver balance is reduced automatically. If manual payment is used, the operator confirms the pending payment request before the session closes.
+            </p>
+            <p class="muted small">
+              Expected result: the booking becomes completed, the session becomes completed, the payment record is created, and the exit gate is marked as unlocked in the UI feedback.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid grid-2" style="margin-top:18px;">
+      <div class="card">
+        <h2>Scenario A: QR check-in</h2>
+        <details open>
+          <summary>Driver flow</summary>
+          <div class="small muted" style="margin-top:10px; line-height:1.7;">
+            <ol class="list">
+              <li>Reserve a spot from Driver Home.</li>
+              <li>On the operator dashboard, generate the driver QR.</li>
+              <li>On the driver side, open the check-in confirm page using the QR link or token.</li>
+              <li>Enter the plate number exactly as used in the booking.</li>
+              <li>Submit the request and wait for operator approval.</li>
+            </ol>
+          </div>
+        </details>
+        <details>
+          <summary>Operator flow</summary>
+          <div class="small muted" style="margin-top:10px; line-height:1.7;">
+            <ol class="list">
+              <li>Open the pending QR check-in queue.</li>
+              <li>Approve the request.</li>
+              <li>Confirm that a session now exists and the booking changed to checked in.</li>
+            </ol>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <h2>Scenario B: Manual payment at exit</h2>
+        <details open>
+          <summary>Driver flow</summary>
+          <div class="small muted" style="margin-top:10px; line-height:1.7;">
+            <ol class="list">
+              <li>Open Driver Home and find the active session.</li>
+              <li>Choose manual bank or phone payment.</li>
+              <li>Enter a reference code and submit the payment request.</li>
+              <li>Wait for the operator to verify it.</li>
+            </ol>
+          </div>
+        </details>
+        <details>
+          <summary>Operator flow</summary>
+          <div class="small muted" style="margin-top:10px; line-height:1.7;">
+            <ol class="list">
+              <li>Open the pending manual payment queue.</li>
+              <li>Review plate, amount, method, and reference code.</li>
+              <li>Confirm or reject the transfer.</li>
+              <li>Confirmation creates the payment record and completes checkout.</li>
+            </ol>
+          </div>
+        </details>
+      </div>
+    </section>
+
+    <section class="grid grid-2" style="margin-top:18px;">
+      <div class="card soft">
+        <h2>Operator direct checkout options</h2>
+        <ul class="list">
+          <li><strong>Cash:</strong> operator collects cash and closes the session directly.</li>
+          <li><strong>Wallet:</strong> system verifies the driver's wallet balance and deducts the amount before closing the session.</li>
+          <li><strong>Manual proof:</strong> driver submits a bank or phone transfer proof first, then operator confirms it from the queue.</li>
+        </ul>
+        <div class="note" style="margin-top:14px;">
+          If a driver has no registered driver profile, wallet checkout at exit should be disabled or fail with a balance or permission message. That is expected behavior.
+        </div>
+      </div>
+
+      <div class="card soft">
+        <h2>What the new code writes</h2>
+        <ul class="list">
+          <li><strong>bookings</strong> holds reserved, checked in, completed, and expired booking state.</li>
+          <li><strong>sessions</strong> tracks active and completed parking stays.</li>
+          <li><strong>paymentRequests</strong> stores pending manual transfer proofs.</li>
+          <li><strong>payments</strong> stores confirmed payment records and receipt data.</li>
+          <li><strong>checkInRequests</strong> stores QR approval requests from the driver flow.</li>
+          <li><strong>parkings</strong> counters are updated to reflect reserved, occupied, and available slots.</li>
+          <li><strong>users</strong> wallet balances are reduced for reservation fees and wallet-based checkout.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card" id="firestore" style="margin-top:18px;">
+      <h2>What you should see in the data layer</h2>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Step</th>
+              <th>Collection</th>
+              <th>Expected change</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Booking created</td>
+              <td>bookings, parkings, users</td>
+              <td>
+                booking becomes reserved; spot assigned; reservation code generated; hold fee deducted.
+              </td>
+              <td>
+                The booking gets start and end times plus a 15 minute grace expiration window.
+              </td>
+            </tr>
+            <tr>
+              <td>QR check-in request sent</td>
+              <td>checkInTokens, checkInRequests</td>
+              <td>
+                a new pending request appears and the QR token becomes used.
+              </td>
+              <td>
+                The driver must confirm the plate number before operator approval.
+              </td>
+            </tr>
+            <tr>
+              <td>Check-in approved</td>
+              <td>bookings, sessions, parkings, checkInRequests</td>
+              <td>
+                booking becomes checked in; a session is created; counters move from reserved to occupied.
+              </td>
+              <td>
+                The vehicle becomes an active session.
+              </td>
+            </tr>
+            <tr>
+              <td>Manual payment submitted</td>
+              <td>paymentRequests, sessions</td>
+              <td>
+                request becomes pending; session paymentStatus becomes pending.
+              </td>
+              <td>
+                The operator must confirm or reject it.
+              </td>
+            </tr>
+            <tr>
+              <td>Checkout confirmed</td>
+              <td>sessions, bookings, payments, parkings, users</td>
+              <td>
+                session becomes completed; booking becomes completed; payment record is created; counters update; wallet may be reduced.
+              </td>
+              <td>
+                Driver wallet checkout and operator wallet checkout both generate receipts.
+              </td>
+            </tr>
+            <tr>
+              <td>Booking expires</td>
+              <td>bookings, parkings</td>
+              <td>
+                booking becomes expired and the reserved slot returns to available.
+              </td>
+              <td>
+                You can trigger the cron manually from the operator dashboard.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="grid grid-2" style="margin-top:18px;">
+      <div class="card">
+        <h2>Recommended test script</h2>
+        <ol class="list">
+          <li>Log in as a driver.</li>
+          <li>Reserve a space for a future time window and note the reservation code.</li>
+          <li>Log in as an operator and confirm the spot is reserved.</li>
+          <li>Generate a QR and complete the driver QR check-in, then approve it as operator.</li>
+          <li>Check that the session becomes active.</li>
+          <li>Test driver wallet checkout or operator direct checkout.</li>
+          <li>Repeat with a manual bank or phone payment request and confirm it from the operator queue.</li>
+          <li>Optionally trigger the expire-bookings cron and verify no-show bookings are cleared.</li>
+        </ol>
+      </div>
+
+      <div class="card soft">
+        <h2>What to verify in the UI</h2>
+        <ul class="list">
+          <li>Reservation code is shown after booking.</li>
+          <li>Reserved spot appears in the lot map.</li>
+          <li>Driver QR confirm page accepts a plate and shows pending approval.</li>
+          <li>Operator can approve or reject check-in requests.</li>
+          <li>Checkout shows fare, tax, and total amount due.</li>
+          <li>Manual payment queue shows the reference code and amount.</li>
+          <li>Receipt modal appears after wallet checkout or confirmed checkout.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="card" id="troubleshooting" style="margin-top:18px; margin-bottom: 8px;">
+      <h2>Troubleshooting and gotchas</h2>
+      <details open>
+        <summary>1. Booking fails with no available slots</summary>
+        <div class="small muted" style="margin-top:10px; line-height:1.7;">
+          The parking lot is out of capacity for the chosen time window. Try another lot or a different time range.
+        </div>
+      </details>
+      <details>
+        <summary>2. Booking fails with insufficient wallet balance</summary>
+        <div class="small muted" style="margin-top:10px; line-height:1.7;">
+          The driver wallet must cover the reservation hold fee. Top up the wallet and try again.
+        </div>
+      </details>
+      <details>
+        <summary>3. QR check-in says token expired</summary>
+        <div class="small muted" style="margin-top:10px; line-height:1.7;">
+          Refresh the QR on the operator dashboard and scan the new one. The token is short-lived by design.
+        </div>
+      </details>
+      <details>
+        <summary>4. Wallet checkout fails</summary>
+        <div class="small muted" style="margin-top:10px; line-height:1.7;">
+          The driver's wallet balance may be too low, or the vehicle may be a walk-in without a registered driver profile.
+        </div>
+      </details>
+      <details>
+        <summary>5. Manual payment never appears in the operator queue</summary>
+        <div class="small muted" style="margin-top:10px; line-height:1.7;">
+          Check that the driver submitted the payment from the active session, with the right plate number and parking lot.
+        </div>
+      </details>
+      <div class="note danger" style="margin-top:14px;">
+        If the app is still pointed at a live project, be careful with test data. For real local-only validation, make sure your Firebase setup is fully isolated before running destructive scenarios.
+      </div>
+    </section>
+
+    <div class="footer">
+      Open this file directly in a browser for a readable local reference while you test the app.
+    </div>
+  </main>
+</body>
+</html>

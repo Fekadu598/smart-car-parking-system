@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Enderase logo</title>
+  <desc id="desc">Orange circle with a white P mark and a car silhouette above the Enderase wordmark.</desc>
+  <defs>
+    <linearGradient id="orangeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff7a18" />
+      <stop offset="100%" stop-color="#f55b00" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="#ffffff" />
+  <circle cx="256" cy="176" r="118" fill="url(#orangeGrad)" />
+  <path d="M223 106h54c29 0 53 22 53 49s-24 49-53 49h-21l-7 40h-35l18-138zm31 31-8 62h17c17 0 31-12 31-31 0-18-14-31-31-31h-9z" fill="#ffffff" />
+  <g transform="translate(106 230)">
+    <path d="M27 60c22-18 51-31 83-37 50-10 107-12 156-7 25 2 43 10 61 23 11 8 19 16 25 27 7 13-3 26-17 26H44c-21 0-31-16-17-32z" fill="#f1732c" />
+    <path d="M36 70c20-15 47-26 78-31 52-9 108-10 159-4 22 3 38 8 52 18 7 5 13 11 18 18 5 8 0 15-10 15H43c-17 0-23-9-7-16z" fill="#d85a14" opacity="0.55" />
+    <circle cx="83" cy="99" r="28" fill="#ffffff" stroke="#d85a14" stroke-width="6" />
+    <circle cx="252" cy="99" r="28" fill="#ffffff" stroke="#d85a14" stroke-width="6" />
+    <path d="M55 70h220c14 0 24 6 31 18l8 13H86l-31-31z" fill="#ffffff" opacity="0.12" />
+    <path d="M53 72c14-10 34-18 58-23 40-8 86-9 128-4 24 3 43 8 58 16" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.95" />
+    <path d="M101 65c0-8 6-14 14-14h43l-3 15z" fill="#ffffff" opacity="0.9" />
+    <path d="M148 55h63" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.9" />
+  </g>
+  <text x="256" y="405" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="60" font-weight="700" fill="#5a5a5a">Enderase</text>
+</svg>

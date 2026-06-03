@@ -1,0 +1,149 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userRole() {
+      return userDoc().data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && userRole() == "admin";
+    }
+
+    function isDriver() {
+      return isSignedIn() && userRole() == "driver";
+    }
+
+    function isOperator() {
+      return isSignedIn() && userRole() == "operator";
+    }
+
+    function isOwner() {
+      return isSignedIn() && userRole() == "owner";
+    }
+
+    function assignedParkingIds() {
+      return userDoc().data.assignedParkingIds;
+    }
+
+    function isAssignedOperator(parkingId) {
+      return isOperator() && assignedParkingIds() is list && parkingId in assignedParkingIds();
+    }
+
+    function ownerIdOfUser() {
+      return userDoc().data.ownerId;
+    }
+
+    function parkingOwnedByCaller(parkingId) {
+      return isOwner()
+        && parkingId is string
+        && exists(/databases/$(database)/documents/parkings/$(parkingId))
+        && get(/databases/$(database)/documents/parkings/$(parkingId)).data.ownerId == ownerIdOfUser();
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid)
+        || isAdmin()
+        || (isOwner() && resource.data.ownerId == ownerIdOfUser());
+
+      allow create: if isSelf(uid)
+        && request.resource.data.role == "driver"
+        && request.resource.data.status == "active"
+        && request.resource.data.email is string
+        && request.resource.data.fullName is string;
+
+      allow update: if isSelf(uid)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.status == resource.data.status
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.assignedParkingIds == resource.data.assignedParkingIds;
+
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /parkings/{parkingId} {
+      allow read: if isAdmin()
+        || (isOwner() && resource.data.ownerId == ownerIdOfUser())
+        || isAssignedOperator(parkingId)
+        || (isDriver() && resource.data.status == "active");
+      allow write: if false;
+    }
+
+    match /bookings/{bookingId} {
+      allow read: if isAdmin()
+        || (isDriver() && resource.data.driverId == request.auth.uid)
+        || isAssignedOperator(resource.data.parkingId)
+        || (isOwner() && resource.data.ownerId == userDoc().data.ownerId)
+        || parkingOwnedByCaller(resource.data.parkingId);
+      allow write: if false;
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAdmin()
+        || (isDriver() && resource.data.driverId == request.auth.uid)
+        || (isOwner() && resource.data.ownerId == ownerIdOfUser())
+        || parkingOwnedByCaller(resource.data.parkingId)
+        || isAssignedOperator(resource.data.parkingId);
+      allow write: if false;
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isAdmin()
+        || (isDriver() && resource.data.driverId == request.auth.uid)
+        || (isOwner() && resource.data.ownerId == ownerIdOfUser())
+        || parkingOwnedByCaller(resource.data.parkingId)
+        || isAssignedOperator(resource.data.parkingId);
+      allow write: if false;
+    }
+
+    match /paymentRequests/{requestId} {
+      allow read: if isAdmin()
+        || (isDriver() && resource.data.driverId == request.auth.uid)
+        || (isOwner() && resource.data.ownerId == ownerIdOfUser())
+        || parkingOwnedByCaller(resource.data.parkingId)
+        || isAssignedOperator(resource.data.parkingId);
+      allow write: if false;
+    }
+
+    match /checkInTokens/{tokenId} {
+      allow read: if isAdmin() || isAssignedOperator(resource.data.parkingId);
+      allow write: if false;
+    }
+
+    match /checkInRequests/{requestId} {
+      allow read: if isAdmin()
+        || (isDriver() && resource.data.driverUid == request.auth.uid)
+        || (isOwner() && resource.data.ownerId == ownerIdOfUser())
+        || parkingOwnedByCaller(resource.data.parkingId)
+        || isAssignedOperator(resource.data.parkingId);
+      allow write: if false;
+    }
+
+    match /dailyReports/{reportId} {
+      allow read: if isAdmin() || (isOwner() && resource.data.ownerId == ownerIdOfUser());
+      allow write: if false;
+    }
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /owners/{doc=**} {
+      allow read: if isAdmin() || (isOwner() && doc == ownerIdOfUser());
+      allow write: if false;
+    }
+  }
+}

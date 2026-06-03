@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enderase Smart Parking - Full Flow Walkthrough</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; line-height: 1.6; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 2.5rem; color: #f8fafc; margin-bottom: 0.25rem; }
+    h1 small { font-size: 1rem; color: #94a3b8; display: block; font-weight: 400; margin-top: 0.25rem; }
+    .subtitle { color: #94a3b8; margin-bottom: 2rem; font-size: 1.05rem; }
+    .arch { background: linear-gradient(135deg, #1e293b, #0f172a); border: 1px solid #334155; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .arch h2 { color: #60a5fa; font-size: 1.3rem; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .arch h3 { color: #a5b4fc; font-size: 1.05rem; margin: 1rem 0 0.5rem; }
+    .arch ul, .arch ol { padding-left: 1.5rem; color: #cbd5e1; }
+    .arch li { margin: 0.35rem 0; }
+    .arch p { color: #cbd5e1; margin: 0.5rem 0; }
+    code { background: #1e293b; color: #f472b6; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.85em; }
+    .badge { display: inline-block; padding: 0.15rem 0.6rem; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    .badge.admin { background: #3b82f6; color: #fff; }
+    .badge.owner { background: #8b5cf6; color: #fff; }
+    .badge.operator { background: #f59e0b; color: #000; }
+    .badge.driver { background: #10b981; color: #000; }
+    .badge.fn { background: #ef4444; color: #fff; }
+    .badge.db { background: #06b6d4; color: #000; }
+    .step-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 0.75rem 0; }
+    .step-grid .step { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 1rem; }
+    .step-grid .step h4 { color: #f1f5f9; font-size: 0.9rem; margin-bottom: 0.5rem; }
+    .step-grid .step p, .step-grid .step li { font-size: 0.85rem; color: #94a3b8; }
+    .step-grid .step code { font-size: 0.8rem; }
+    .table-wrap { overflow-x: auto; margin: 0.75rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { background: #1e293b; color: #94a3b8; padding: 0.5rem 0.75rem; text-align: left; border-bottom: 2px solid #334155; }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #1e293b; color: #cbd5e1; }
+    tr:hover td { background: #1e293b88; }
+    .flow-arrow { color: #475569; font-size: 1.5rem; text-align: center; padding: 0.25rem 0; }
+    .recap { background: #1e293b; border-left: 4px solid #60a5fa; padding: 1rem 1.25rem; border-radius: 0 8px 8px 0; margin: 0.75rem 0; }
+    .recap h4 { color: #60a5fa; margin-bottom: 0.25rem; }
+    .changelog { border-left: 3px solid #f59e0b; padding-left: 1rem; margin: 0.5rem 0; }
+    .changelog li { color: #fbbf24; }
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, #334155, transparent); margin: 1.5rem 0; }
+    @media (max-width: 768px) { .step-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <h1>Enderase Smart Parking <small>Full End-to-End Flow Walkthrough</small></h1>
+    <p class="subtitle">Covers: Architecture, Role Setup, Booking → Check-In → Payment → Check-Out &amp; Recent Changes</p>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>1. System Architecture Overview</h2>
+      <p>
+        <strong>Stack:</strong> React 18 + Firebase v12 (Auth, Firestore, Functions) + Tailwind CSS + TanStack Query v5 + Recharts<br>
+        <strong>Deploy:</strong> Vercel (frontend) + Firebase (backend) | <strong>Emulator:</strong> Full local emulation supported
+      </p>
+
+      <h3>Firestore Collections</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Collection</th>
+              <th>Key Fields</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>users</code></td><td>role, status, walletBalance, ownerId, assignedParkingIds</td><td>All user profiles (admin/owner/operator/driver)</td></tr>
+            <tr><td><code>owners</code></td><td>ownerId, userId, phone, bankAccountNumber, status, restoreSnapshot</td><td>Owner-specific payment &amp; lifecycle data</td></tr>
+            <tr><td><code>parkings</code></td><td>ownerId, name, location, status, slotCapacity, availableSlots, reservedSlots, occupiedSlots, hourlyRate</td><td>Parking lot configurations &amp; live counters</td></tr>
+            <tr><td><code>bookings</code></td><td>parkingId, driverId, plateNumber, status, spotId, reservationCode, startTime, endTime, expiresAt</td><td>Reservation lifecycle (reserved→checked_in→completed/expired)</td></tr>
+            <tr><td><code>sessions</code></td><td>parkingId, driverId, plateNumber, spotId, status, entryTime, exitTime, paymentStatus, feeAmount</td><td>Active/completed parking sessions</td></tr>
+            <tr><td><code>payments</code></td><td>sessionId, parkingId, grossAmount, platformCommission, ownerAmount, method, status</td><td>Confirmed payment records with 10% commission split</td></tr>
+            <tr><td><code>paymentRequests</code></td><td>sessionId, parkingId, driverId, amountDue, method, referenceCode, status</td><td>Manual payment submissions awaiting operator confirmation</td></tr>
+            <tr><td><code>checkInTokens</code></td><td>tokenId, parkingId, operatorUid, status, expiresAt</td><td>60-second TTL QR tokens for driver check-in</td></tr>
+            <tr><td><code>checkInRequests</code></td><td>parkingId, operatorUid, driverUid, bookingId, plateNumber, status</td><td>QR-based check-in requests (pending→approved/rejected)</td></tr>
+            <tr><td><code>auditLogs</code></td><td>action, actorUid, parkingId, metadata, createdAt</td><td>Full audit trail for every action</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>Key Invariant:</strong> <code>availableSlots + reservedSlots + occupiedSlots = slotCapacity</code> — enforced in every transaction.</p>
+
+      <h3>4 User Roles &amp; Routes</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Role</th><th>Route</th><th>What They Do</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="badge admin">Admin</span></td><td><code>/admin/home</code></td><td>Create owners, create/update parkings, assign operators, archive/restore owners, view analytics with 10% commission</td></tr>
+            <tr><td><span class="badge owner">Owner</span></td><td><code>/owner/home</code></td><td>View own analytics, create/manage operators, set payment destination (phone/bank), view own parkings</td></tr>
+            <tr><td><span class="badge operator">Operator</span></td><td><code>/operator/home</code></td><td>Check-in vehicles (reservation/walk-in), generate QR codes, approve/reject QR check-ins, confirm/reject manual payments, direct checkout</td></tr>
+            <tr><td><span class="badge driver">Driver</span></td><td><code>/driver/home</code></td><td>Book spots with time window, scan QR for check-in, wallet checkout, manual bank/phone payment, top up wallet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Cloud Functions (Callable + Scheduled)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Function</th><th>Caller</th><th>What It Does</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>createBooking</code></td><td><span class="badge driver">Driver</span></td><td>Reserves a spot, deducts 20 ETB hold fee from wallet, allocates spot ID, 15-min grace period</td></tr>
+            <tr><td><code>checkInVehicle</code></td><td><span class="badge operator">Operator</span></td><td>Checks in vehicle by reservationCode or plateNumber (or walk-in), creates session</td></tr>
+            <tr><td><code>checkOutVehicle</code></td><td><span class="badge operator">Operator</span></td><td>Operator checkout (cash or wallet deduction), completes session &amp; payment</td></tr>
+            <tr><td><code>driverCheckOutVehicle</code></td><td><span class="badge driver">Driver</span></td><td>Driver self-checkout via wallet, auto-deducts, creates payment record</td></tr>
+            <tr><td><code>submitManualPayment</code></td><td><span class="badge driver">Driver</span></td><td>Driver submits bank/phone payment proof (reference code) for operator review</td></tr>
+            <tr><td><code>confirmManualPayment</code></td><td><span class="badge operator">Operator</span></td><td>Operator confirms payment received, completes session &amp; records payment</td></tr>
+            <tr><td><code>rejectManualPayment</code></td><td><span class="badge operator">Operator</span></td><td>Operator rejects payment, session stays active for retry</td></tr>
+            <tr><td><code>createParkingCheckInToken</code></td><td><span class="badge operator">Operator</span></td><td>Generates 60-second QR token with deep link</td></tr>
+            <tr><td><code>confirmCheckInFromQr</code></td><td><span class="badge driver">Driver</span></td><td>Driver scans QR, submits plate number, creates check-in request + auto-booking if needed</td></tr>
+            <tr><td><code>approveCheckInRequest</code></td><td><span class="badge operator">Operator</span></td><td>Approves QR check-in, converts booking→session, opens gate</td></tr>
+            <tr><td><code>rejectCheckInRequest</code></td><td><span class="badge operator">Operator</span></td><td>Rejects QR check-in, cancels auto-created booking if applicable</td></tr>
+            <tr><td><code>topUpWallet</code></td><td><span class="badge driver">Driver</span></td><td>Adds simulated digital currency to driver's wallet</td></tr>
+            <tr><td><code>getAdminAnalytics</code></td><td><span class="badge admin">Admin</span></td><td>Aggregated revenue, commission, top owners/parkings, payment breakdown</td></tr>
+            <tr><td><code>getOwnerAnalytics</code></td><td><span class="badge owner">Owner</span></td><td>Owner-specific revenue, parking performance, operator status</td></tr>
+            <tr><td><code>createOwnerAccount</code></td><td><span class="badge admin">Admin</span></td><td>Creates Firebase Auth user + users doc + owners doc</td></tr>
+            <tr><td><code>adminArchiveOwner</code></td><td><span class="badge admin">Admin</span></td><td>Deactivates owner, all their parkings &amp; operators, saves restore snapshot</td></tr>
+            <tr><td><code>adminRestoreOwner</code></td><td><span class="badge admin">Admin</span></td><td>Restores owner from snapshot, reactivates parkings/operators</td></tr>
+            <tr><td><code>upsertParking</code></td><td><span class="badge admin">Admin</span></td><td>Create/update parking with location, slot counters, hourly rate</td></tr>
+            <tr><td><code>assignOperatorToParking</code></td><td><span class="badge admin">Admin</span></td><td>Assign/unassign operator to a parking lot</td></tr>
+            <tr><td><code>ownerCreateOperator</code></td><td><span class="badge owner">Owner</span></td><td>Creates operator user + assigns to own parkings</td></tr>
+            <tr><td><code>ownerUpdatePaymentDetails</code></td><td><span class="badge owner">Owner</span></td><td>Sets phone &amp; bank account for drivers to send payment to</td></tr>
+            <tr><td><code>ownerSetOperatorStatus</code></td><td><span class="badge owner">Owner</span></td><td>Activate/deactivate operator</td></tr>
+            <tr><td><code>ownerUpdateOperatorAssignments</code></td><td><span class="badge owner">Owner</span></td><td>Update which parkings an operator is assigned to</td></tr>
+            <tr><td><code>getParkingPaymentDetails</code></td><td><span class="badge driver">Driver</span> / <span class="badge operator">Operator</span></td><td>Returns owner's phone &amp; bank info for manual payment</td></tr>
+            <tr><td><code>listPendingPaymentsForOperator</code></td><td><span class="badge operator">Operator</span></td><td>Lists pending manual payment requests for a parking</td></tr>
+            <tr><td><code>listPendingPaymentsForDriver</code></td><td><span class="badge driver">Driver</span></td><td>Lists driver's pending manual payment submissions</td></tr>
+            <tr><td><code>getPendingPaymentForSession</code></td><td><span class="badge operator">Operator</span></td><td>Get pending payment details for a specific session</td></tr>
+            <tr><td><code>expireBookings</code></td><td>Scheduled (5 min)</td><td>Expires past-due reservations, penalizes 15 ETB from wallet</td></tr>
+            <tr><td><code>expireBookingsManual</code></td><td><span class="badge operator">Operator</span></td><td>Manual trigger of booking expiration (button in operator UI)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>2. Prerequisites: Setting Up The System</h2>
+
+      <h3>Step A: Admin Creates an Owner</h3>
+      <ol>
+        <li>Admin logs in at <code>/login</code> (seed admin account directly in Firebase console)</li>
+        <li>Goes to <code>/admin/home</code> → "Create Owner Account" form</li>
+        <li>Fills: Full Name, Email, Password, Phone, Bank Account</li>
+        <li>On submit: <code>createOwnerAccount</code> creates Firebase Auth user + <code>users/{uid}</code> doc (role: "owner") + <code>owners/owner_{uid}</code> doc (payment details)</li>
+      </ol>
+
+      <h3>Step B: Admin Creates a Parking Lot</h3>
+      <ol>
+        <li>In <code>/admin/home</code> → "Create / Update Parking" form</li>
+        <li>Selects the owner, fills: name, address, lat/lng, capacity (e.g. 20 slots), hourly rate (default 50 ETB), status</li>
+        <li>On submit: <code>upsertParking</code> validates counters (<code>available+reserved+occupied = capacity</code>), checks owner isn't archived</li>
+        <li>Result: <code>parkings/{parkingId}</code> doc created with <code>status: "active"</code></li>
+      </ol>
+
+      <h3>Step C: Owner Creates an Operator</h3>
+      <ol>
+        <li>Owner logs in → goes to <code>/owner/home</code> → "Create Operator" form</li>
+        <li>Fills: name, email, password, selects which parking(s) to assign</li>
+        <li>On submit: <code>ownerCreateOperator</code> creates Firebase Auth user + <code>users/{uid}</code> doc (role: "operator", ownerId, assignedParkingIds)</li>
+      </ol>
+
+      <h3>Step D: Owner Sets Payment Destination</h3>
+      <ol>
+        <li>In <code>/owner/home</code> → "Payment Destination Details"</li>
+        <li>Sets phone number (for mobile money) and/or bank account number</li>
+        <li>On submit: <code>ownerUpdatePaymentDetails</code> updates <code>owners/{ownerId}</code> with phone/bankAccountNumber</li>
+        <li>Drivers will see these details when they choose manual checkout</li>
+      </ol>
+
+      <h3>Step E: Admin Assigns Operator to Parking (if needed)</h3>
+      <ol>
+        <li>In <code>/admin/home</code> → "Assign Operator" form</li>
+        <li>Selects operator and parking, checks "Assign"</li>
+        <li>Validates owner is not archived before assigning</li>
+      </ol>
+
+      <h3>Step F: Driver Signs Up</h3>
+      <ol>
+        <li>Goes to <code>/signup</code>, fills name, email, password</li>
+        <li>On submit: Firebase Auth user created + <code>users/{uid}</code> doc (role: "driver", walletBalance default: 100.00 ETB)</li>
+        <li>Redirected to <code>/driver/home</code></li>
+      </ol>
+
+      <div class="recap">
+        <h4>System Ready ✓</h4>
+        <p>Now you have: 1 Admin, 1 Owner, 1 Operator, 1 Driver, 1 Parking Lot with 20 slots at 50 ETB/hr. The driver starts with 100 ETB wallet balance.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>3. The Booking Flow (Driver)</h2>
+
+      <div class="step-grid">
+        <div class="step">
+          <h4>1. Select Parking</h4>
+          <p>Driver sees a map with parking markers, a 1000m radius circle, and available slots. Clicks a parking card to select it.</p>
+          <p><strong>UI Location:</strong> <code>DriverHome.js:540-556</code></p>
+        </div>
+        <div class="step">
+          <h4>2. Fill Booking Form</h4>
+          <p>Driver selects: Parking Location, Plate Number, Start Time (datetime-local), End Time (datetime-local).</p>
+          <p><strong>Price:</strong> 50 ETB/hr base rate + 15% VAT. Hold fee: 20 ETB.</p>
+        </div>
+        <div class="step">
+          <h4>3. Submit Booking</h4>
+          <p>Click "Reserve &amp; Pay 20.00 ETB". Calls <code>createBooking</code> cloud function.</p>
+          <p><strong>UI:</strong> <code>DriverHome.js:247-278</code></p>
+        </div>
+      </div>
+
+      <h3>What <code>createBooking</code> Does (functions/index.js:643-749)</h3>
+      <ol>
+        <li><strong>Validates</strong>: parkingId, plateNumber, startTime &lt; endTime</li>
+        <li><strong>assertPlateNotInUse</strong>: Checks no active session OR reservation exists for this plate anywhere (across all parkings) — <em>this is a NEW hardening added in commit 0e98678</em></li>
+        <li><strong>Reads parking</strong> in transaction: verifies status = "active", availableSlots > 0, counters invariant holds</li>
+        <li><strong>Reads driver wallet</strong>: checks balance ≥ 20 ETB hold fee</li>
+        <li><strong>Allocates spot</strong>: <code>allocateSpot()</code> — checks active sessions + overlapping time-window bookings for non-conflicting spot ID</li>
+        <li><strong>Deducts 20 ETB</strong> from wallet</li>
+        <li><strong>Creates booking doc</strong> with status "reserved", spotId, reservationCode (e.g., "RES-A3B2C1"), startTime, endTime, expiresAt (startTime + 15 min grace period)</li>
+        <li><strong>Updates parking counters</strong>: availableSlots -1, reservedSlots +1</li>
+        <li><strong>Returns</strong>: bookingId, spotId, reservationCode, directions (text-based navigation), remainingBalance</li>
+      </ol>
+
+      <h3>What The Driver Sees After Booking</h3>
+      <ul>
+        <li><strong>Wallet</strong>: Deducted 20 ETB (e.g., 100 → 80 ETB)</li>
+        <li><strong>Active Reservations card</strong>: shows plateNumber, status "reserved", reservationCode, spotId, start time, grace expiration time</li>
+        <li><strong>Booking Flow State badge</strong>: "Reserve Complete / Awaiting Check-In"</li>
+        <li><strong>Text Navigation Assistant</strong>: Driving directions to the assigned spot, walking directions from pedestrian entrance</li>
+      </ul>
+
+      <h3>Booking Expiration (Scheduled)</h3>
+      <p>Every 5 minutes, the <code>expireBookings</code> scheduled function finds all "reserved" bookings where <code>expiresAt &lt;= now</code>. For each expired booking:</p>
+      <ul>
+        <li>Sets booking status → "expired"</li>
+        <li>Updates parking: reservedSlots -1, availableSlots +1</li>
+        <li>Penalizes driver: deducts 15 ETB from wallet (no-show penalty)</li>
+      </ul>
+      <p>Operators can also trigger this manually via the "Trigger Expire Bookings Cron" button in <code>/operator/home</code> → calls <code>expireBookingsManual</code></p>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>4. Check-In Flow (Driver + Operator)</h2>
+
+      <h3>There are 2 check-in paths:</h3>
+
+      <!-- ==================== PATH A: QR ==================== -->
+      <h3 style="color: #60a5fa;">Path A: QR Code Check-In (Recommended)</h3>
+      <div class="step-grid">
+        <div class="step">
+          <h4>1. Operator Generates QR</h4>
+          <p>In <code>/operator/home</code> → "Driver Check-In QR" panel. QR auto-refreshes every 55 seconds (token TTL: 60s).</p>
+          <p><strong>Cloud function:</strong> <code>createParkingCheckInToken</code> (index.js:2238-2267)</p>
+          <p>Creates <code>checkInTokens/{token}</code> doc with <code>expiresAt: now + 60s</code></p>
+          <p>Returns <code>deepLink</code>: <code>http://.../driver/checkin-confirm?token={token}</code></p>
+        </div>
+        <div class="step">
+          <h4>2. Driver Opens QR Link</h4>
+          <p>Driver pastes the QR link/token into <code>/driver/home</code> QR input box, or clicks "Open Deep Link".</p>
+          <p>Navigates to <code>/driver/checkin-confirm?token=xxx</code></p>
+          <p><strong>UI:</strong> <code>DriverCheckInConfirm.js</code></p>
+        </div>
+        <div class="step">
+          <h4>3. Driver Confirms Plate</h4>
+          <p>Driver enters their plate number and clicks "Confirm Check-In".</p>
+          <p><strong>Cloud function:</strong> <code>confirmCheckInFromQr</code> (index.js:2269-2426)</p>
+        </div>
+        <div class="step">
+          <h4>4. Operator Approves</h4>
+          <p>In <code>/operator/home</code> → "Pending QR Check-In Requests" panel, operator sees the request and clicks "Approve" or "Reject".</p>
+          <p><strong>Functions:</strong> <code>approveCheckInRequest</code> / <code>rejectCheckInRequest</code></p>
+          <p>On approve: gate alert flashes, session starts.</p>
+        </div>
+      </div>
+
+      <h3>What <code>confirmCheckInFromQr</code> Does (index.js:2269-2426)</h3>
+      <ol>
+        <li>Validates token exists, is "active", and not expired</li>
+        <li>Checks parking is active and has available slots</li>
+        <li>Checks no existing pending request for this driver+parking</li>
+        <li>Checks no active session exists for this plate number (<em>NEW in 0e98678</em>)</li>
+        <li>Checks no active reservation exists for this plate number (<em>NEW in 0e98678</em>)</li>
+        <li>If no matching booking found, <strong>auto-creates a booking</strong> (reserved status, 15-min TTL)</li>
+        <li>Creates <code>checkInRequests/{id}</code> doc with status "pending"</li>
+        <li>Marks token as "used"</li>
+        <li>Returns requestId — driver sees "Waiting for operator approval..."</li>
+      </ol>
+
+      <h3>What <code>approveCheckInRequest</code> Does (index.js:2428-2524)</h3>
+      <ol>
+        <li>Validates request is "pending"</li>
+        <li>Checks parking is active, counters invariant holds</li>
+        <li>Checks booking is still "reserved"</li>
+        <li>Checks no active session already exists for this plate (<em>NEW hardening</em>)</li>
+        <li>Updates booking → "checked_in", checkInAt = now</li>
+        <li>Updates parking: reservedSlots -1, occupiedSlots +1</li>
+        <li><strong>Creates session doc</strong> with status "active", paymentStatus "unpaid", spotId from booking</li>
+        <li>Updates request → "approved", records approvedBy, sessionId</li>
+        <li>Returns sessionId — operator sees green gate unlock alert</li>
+      </ol>
+
+      <h3>What <code>rejectCheckInRequest</code> Does (index.js:2526-2579)</h3>
+      <ol>
+        <li>Updates request → "rejected"</li>
+        <li>If the booking was auto-created (no prior reservation): cancels it, releases parking slot</li>
+        <li>If the booking was a real reservation: booking stays "reserved" — driver can try again</li>
+      </ol>
+
+      <!-- ==================== PATH B: Manual ==================== -->
+      <h3 style="color: #f59e0b;">Path B: Manual Operator Check-In (Walk-In / Reservation)</h3>
+      <div class="step-grid">
+        <div class="step">
+          <h4>1. Operator Opens Check-In Form</h4>
+          <p>In <code>/operator/home</code> → "Manual Vehicle Check-In" card</p>
+          <p>Selects parking, enters plate number, optional reservation code</p>
+        </div>
+        <div class="step">
+          <h4>2. Operator Clicks "Confirm Gate Access"</h4>
+          <p><strong>Cloud function:</strong> <code>checkInVehicle</code> (index.js:804-957)</p>
+        </div>
+      </div>
+
+      <h3>What <code>checkInVehicle</code> Does (index.js:804-957)</h3>
+      <ol>
+        <li>Looks up booking by reservationCode OR plateNumber (where status = "reserved")</li>
+        <li><strong>assertPlateNotInUse</strong>: checks no active session for this plate (<em>NEW — now searches across ALL parkings, not just this one</em>)</li>
+        <li>If booking exists &amp; not expired: updates booking → "checked_in", parking: reserved → occupied</li>
+        <li>If booking is expired: marks it expired, releases slot</li>
+        <li>If no booking &amp; <code>allowWalkIn</code> = true: allocates new spot, parking: available → occupied</li>
+        <li>Creates session doc with status "active", spotId, paymentStatus "unpaid"</li>
+        <li>Returns sessionId, spotId, gateOpened: true, text directions</li>
+      </ol>
+
+      <div class="recap">
+        <h4>After Check-In ✓</h4>
+        <p>Driver's <code>/driver/home</code> now shows an "Active Parking Sessions" card with the plate number, spot ID, entry time. <strong>Booking Flow State</strong> badge changes to "Approved / Active Session".</p>
+        <p>Operator's <code>/operator/home</code> shows the session in the active list, and the slot turns from green (available) → red (occupied) in the spot grid.</p>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>5. Check-Out &amp; Payment Flow</h2>
+
+      <h3>There are 3 checkout/payment methods:</h3>
+
+      <!-- =========== A: Wallet Self-Checkout =========== -->
+      <h3 style="color: #10b981;">Method A: Wallet Self-Checkout (Driver)</h3>
+      <div class="step-grid">
+        <div class="step">
+          <h4>1. Driver Clicks "Quick Wallet Pay &amp; Checkout"</h4>
+          <p>In <code>/driver/home</code> → "Active Parking Sessions" card → green button.</p>
+          <p><strong>This is only enabled if:</strong> session is active, paymentStatus ≠ "confirmed", no pending manual payment</p>
+        </div>
+        <div class="step">
+          <h4>2. <code>driverCheckOutVehicle</code> Runs (index.js:1138-1277)</h4>
+          <ul>
+            <li>Validates session is active and belongs to this driver</li>
+            <li>Reads parking hourlyRate</li>
+            <li>Computes charge: <code>duration = ceil((now - entryTime) / 60000)</code> minutes, <code>billedHours = max(1, ceil(duration / 60))</code></li>
+            <li><code>baseFare = billedHours × hourlyRate</code></li>
+            <li><code>tax = baseFare × 15%</code></li>
+            <li><code>amountDue = baseFare + tax</code></li>
+            <li>Checks wallet balance ≥ amountDue</li>
+            <li>Deducts from wallet, creates payment doc (with 10% admin commission split)</li>
+            <li>Updates session → "completed", exitTime, paymentStatus "confirmed"</li>
+            <li>Updates parking: occupiedSlots -1, availableSlots +1</li>
+            <li>Updates booking → "completed"</li>
+          </ul>
+        </div>
+        <div class="step">
+          <h4>3. Receipt Modal Appears</h4>
+          <p>Shows: paymentMethod ("wallet"), durationMinutes, billedHours, baseFare, tax, total amountDue, remainingBalance. Plus a simulated "Exit Gate Unlocked" animation.</p>
+        </div>
+      </div>
+
+      <!-- =========== B: Manual Payment =========== -->
+      <h3 style="color: #f59e0b;">Method B: Manual Bank/Phone Payment (Driver → Operator Confirmation)</h3>
+      <div class="step-grid">
+        <div class="step">
+          <h4>1. Driver Clicks "Manual Bank/Phone Checkout"</h4>
+          <p>In <code>/driver/home</code> → "Active Parking Sessions" card → outline button.</p>
+        </div>
+        <div class="step">
+          <h4>2. Dialog Shows Payment Details</h4>
+          <p>Driver sees the owner's bank account or phone number (fetched via <code>getParkingPaymentDetails</code>).</p>
+          <p>Selects method: "Bank Transfer" or "Phone Payment", enters Reference Code (e.g., transaction slip ID).</p>
+        </div>
+        <div class="step">
+          <h4>3. Clicks "Complete Manual Checkout"</h4>
+          <p>Calls <code>submitManualPayment</code> (index.js:1108-1136) → creates <code>paymentRequests/{id}</code> with status "pending"</p>
+          <p>Session paymentStatus set to "pending". Driver sees "Payment submitted. Waiting for operator confirmation."</p>
+        </div>
+        <div class="step">
+          <h4>4. Operator Confirms Payment</h4>
+          <p>In <code>/operator/home</code> → "Pending Manual Payments Queue" panel. Operator sees plate, amount, method, reference code.</p>
+          <p>Clicks "Confirm" → <code>confirmManualPayment</code> runs (index.js:1366-1504):</p>
+          <ul>
+            <li>Updates session → "completed", exitTime, paymentStatus "confirmed"</li>
+            <li>Updates parking: occupied -1, available +1</li>
+            <li>Creates payment doc with 10% commission split</li>
+            <li>Updates paymentRequest → "confirmed"</li>
+            <li>Gate opens! (green flash)</li>
+          </ul>
+          <p>Alternatively, clicks "Reject" → session stays active, driver can retry.</p>
+        </div>
+      </div>
+
+      <!-- =========== C: Operator Direct Checkout =========== -->
+      <h3 style="color: #8b5cf6;">Method C: Operator Direct Checkout (Cash or Wallet)</h3>
+      <div class="step-grid">
+        <div class="step">
+          <h4>1. Operator Searches Vehicle</h4>
+          <p>In <code>/operator/home</code> → "Direct Exit Search &amp; Checkout Gateway" — types plate number.</p>
+          <p>Matching active sessions appear below.</p>
+        </div>
+        <div class="step">
+          <h4>2. Clicks "Direct Checkout"</h4>
+          <p>Dialog opens: can select "Cash Paid Directly to Operator" or "Wallet Balance Deduction" (only if session has driverId).</p>
+        </div>
+        <div class="step">
+          <h4>3. Clicks "Approve &amp; Unlock Exit Gate"</h4>
+          <p>Calls <code>checkOutVehicle</code> (index.js:959-1106):</p>
+          <ul>
+            <li>Same charge calculation as wallet checkout</li>
+            <li>If "wallet": deducts from driver's wallet (checks sufficient balance)</li>
+            <li>If "cash": no wallet deduction, just records the payment</li>
+            <li>Completes session, creates payment record with commission split</li>
+            <li>Frees parking slot</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3>Charge Calculation Details</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Field</th><th>Formula</th><th>Example (entry=10:00, checkout=12:30)</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Duration</td><td><code>ceil((checkout - entry) / 60000)</code></td><td>150 min</td></tr>
+            <tr><td>Billed Hours</td><td><code>max(1, ceil(duration / 60))</code></td><td>3 hours</td></tr>
+            <tr><td>Base Fare</td><td><code>billedHours × hourlyRate</code></td><td>3 × 50 = 150 ETB</td></tr>
+            <tr><td>VAT (15%)</td><td><code>baseFare × 0.15</code></td><td>22.50 ETB</td></tr>
+            <tr><td>Amount Due</td><td><code>baseFare + tax</code></td><td>172.50 ETB</td></tr>
+            <tr><td>Platform Commission</td><td><code>amountDue × 10%</code></td><td>17.25 ETB</td></tr>
+            <tr><td>Owner Receives</td><td><code>amountDue - commission</code></td><td>155.25 ETB</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>6. Analytics &amp; Management (Admin + Owner)</h2>
+
+      <h3>Admin Dashboard (<code>/admin/home</code>)</h3>
+      <ul>
+        <li><strong>Analytics cards</strong>: Gross Revenue, Admin 10% Commission, Owner Share, Pending Payment Requests, Confirmed Payments</li>
+        <li><strong>Revenue Trend chart</strong>: Line chart showing gross/owner/admin per day</li>
+        <li><strong>Payment Method Breakdown</strong>: Bar chart of bank vs phone vs wallet vs cash</li>
+        <li><strong>Composition chart</strong>: Stacked area of owner vs admin split</li>
+        <li><strong>Top Owners table</strong>: Sorted by gross revenue</li>
+        <li><strong>Payments Drill-Down table</strong>: Individual payment records with sorting</li>
+        <li><strong>Owner Lifecycle Controls</strong>: Deactivate (archive) / Reactivate owners — cascades to parkings &amp; operators</li>
+        <li><strong>CRUD forms</strong>: Create Owner, Create/Update Parking, Assign Operator — <em>all now validate owner is not archived before allowing actions</em></li>
+      </ul>
+
+      <h3>Owner Dashboard (<code>/owner/home</code>)</h3>
+      <ul>
+        <li><strong>Analytics</strong>: Owner Revenue, Gross Revenue, Admin Commission, Completed Sessions, Pending Requests</li>
+        <li><strong>Parking Performance table</strong>: Revenue per owned parking</li>
+        <li><strong>Payment Destination</strong>: Set phone &amp; bank account for driver payments</li>
+        <li><strong>Operator Management</strong>: Create operators, update parking assignments (checkbox UI), activate/deactivate</li>
+        <li><strong>Parkings view</strong>: Live slot distribution for each owned parking</li>
+        <li><strong>Blocked if archived</strong>: <code>getOwnerAnalytics</code> now prevents archived owners from accessing data (added in 8ead1c2)</li>
+      </ul>
+
+      <h3>Operator Dashboard (<code>/operator/home</code>)</h3>
+      <ul>
+        <li><strong>Spot Status Grid</strong>: Color-coded grid showing available (green), occupied (red), reserved (amber) spots</li>
+        <li><strong>Direct Exit Search</strong>: Search by plate to find &amp; checkout vehicles</li>
+        <li><strong>Manual Check-In</strong>: By reservation code or plate (with walk-in toggle)</li>
+        <li><strong>QR Generation</strong>: Auto-refreshing QR token with deep link</li>
+        <li><strong>Pending QR Requests</strong>: Approve/reject driver QR check-ins</li>
+        <li><strong>Pending Manual Payments</strong>: Confirm/reject bank/phone payment submissions</li>
+        <li><strong>Gate Alert</strong>: Visual flash when gate is "unlocked"</li>
+        <li><strong>Manual Cron Trigger</strong>: Expire no-show bookings on demand</li>
+      </ul>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>7. Wallet Top-Up (Driver)</h2>
+      <p>In <code>/driver/home</code>, the Digital Wallet Balance card shows the current balance and 3 quick-top-up buttons:</p>
+      <ul>
+        <li><strong>+100 ETB</strong>, <strong>+200 ETB</strong>, <strong>+500 ETB</strong></li>
+        <li>Each calls <code>topUpWallet</code> (index.js:1279-1315) — adds amount to <code>users/{uid}.walletBalance</code></li>
+        <li>Default seed balance is 100.00 ETB</li>
+        <li>Used for: booking hold fee (20 ETB), wallet checkout, wallet deduction by operator</li>
+      </ul>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>8. Recent Changes (Last 3 Commits)</h2>
+
+      <h3>Commit <code>0e98678</code> — "set up two same plate number blocking"</h3>
+      <div class="changelog">
+        <ul>
+          <li><strong>New function</strong> <code>assertPlateNotInUse(plateNumber, options)</code> — globally checks if a plate has an active session or unexpired reservation across ALL parkings</li>
+          <li>Applied in <code>createBooking</code> (prevents double-booking same plate)</li>
+          <li>Applied in <code>checkInVehicle</code> (removed old parkingId-scoped check; now checks globally via <code>assertPlateNotInUse</code>)</li>
+          <li>Applied in <code>confirmCheckInFromQr</code> (new plate-scoped check before creating booking)</li>
+          <li>Applied in <code>approveCheckInRequest</code> (changed from parkingId-scoped to plate-scoped session check)</li>
+          <li>DriverHome: bookings snapshot filters out expired bookings client-side; added <code>pendingPaymentsError</code> state; disabled checkout buttons with <code>canCheckout</code> logic (session active + payment not confirmed + no pending payment)</li>
+        </ul>
+      </div>
+
+      <h3>Commit <code>8ead1c2</code> — "harden the process of booking and delete owner for admins"</h3>
+      <div class="changelog">
+        <ul>
+          <li><strong>adminArchiveOwner</strong> — Full cascading deactivation: sets owner→"archived", owner user→"inactive", all parkings→"inactive", all operators→"inactive" with cleared assignments. Blocks if active sessions or reserved bookings exist. Saves <code>restoreSnapshot</code> for later restoration.</li>
+          <li><strong>adminRestoreOwner</strong> — Restores owner &amp; user → "active", restores parkings to pre-archive status, restores operators to pre-archive status &amp; assignments (validates parking IDs still exist)</li>
+          <li><strong>assertOwnerAccountActive()</strong> — Guards all owner operations: createOperator, updateAssignments, setOperatorStatus, updatePaymentDetails</li>
+          <li><strong>upsertParking</strong> — Now validates ownerId exists and is not archived before allowing creation/update</li>
+          <li><strong>assignOperatorToParking</strong> — Now validates parking's owner exists and is not archived before assigning</li>
+          <li><strong>getOwnerAnalytics</strong> — Now returns error if owner is archived</li>
+          <li><strong>isBookingExpired()</strong> + <strong>expireReservedBookingIfExpired()</strong> — Utilities for checking &amp; cleaning expired bookings</li>
+          <li>AdminHome UI: owner lifecycle dialog with affected parkings/operators count, archive reason input, success/error notices</li>
+          <li>DriverHome UI: flow state badge (Reserve / Reserve Complete / Active Session), better button disabling states</li>
+          <li>OperatorHome UI: pending payments error state display</li>
+        </ul>
+      </div>
+
+      <h3>Commit <code>25f85fe</code> — "audit npm package also"</h3>
+      <div class="changelog">
+        <ul>
+          <li>Updated <code>package.json</code> and <code>package-lock.json</code> dependencies</li>
+          <li>Added <code>vercel.json</code> deployment configuration</li>
+          <li>New docs: <code>11-deploy-and-emulator-runbook.md</code></li>
+          <li>New dashboard hooks: <code>useCreateOwnerAccount</code>, <code>useUpsertParking</code>, <code>useAssignOperatorToParking</code>, <code>useAdminArchiveOwner</code>, <code>useAdminRestoreOwner</code>, <code>useUpdateOwnerPaymentDetails</code>, <code>useCreateOwnerOperator</code>, <code>useUpdateOwnerOperatorAssignments</code>, <code>useSetOwnerOperatorStatus</code></li>
+          <li>New dashboard API functions with Zod validation: <code>createOwnerAccount</code>, <code>upsertParking</code>, <code>assignOperatorToParking</code>, <code>adminArchiveOwner</code>, <code>adminRestoreOwner</code>, <code>updateOwnerPaymentDetails</code>, <code>createOwnerOperator</code>, <code>updateOwnerOperatorAssignments</code>, <code>setOwnerOperatorStatus</code></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- ============================================================ -->
+    <div class="arch">
+      <h2>9. How To Test Everything (Step-by-Step)</h2>
+      <p>Follow these steps in order to exercise the full flow:</p>
+
+      <h3>Setup Phase</h3>
+      <ol>
+        <li><strong>Admin logs in</strong> at <code>/login</code> (seed admin manually in Firebase Auth + Firestore <code>users/{uid}</code> with role "admin")</li>
+        <li><strong>Go to <code>/admin/home</code></strong> → Create Owner (fill all fields) → Create Parking (select the owner, fill name, address, lat/lng e.g. 9.025/38.7469, capacity 20, hourly rate 50) → Assign Operator (if you created one)</li>
+        <li><strong>Owner logs in</strong> → <code>/owner/home</code> → Create Operator (fill details, assign parking) → Set Payment Details (add phone "0912345678" and bank account)</li>
+        <li><strong>Driver signs up</strong> at <code>/signup</code> → gets default 100 ETB wallet balance</li>
+      </ol>
+
+      <h3>Booking → Check-In (QR Path)</h3>
+      <ol>
+        <li><strong>Operator logs in</strong> → <code>/operator/home</code> → QR panel auto-generates a QR code. Copy the deep link URL.</li>
+        <li><strong>Driver opens</strong> the deep link (or paste token into QR input → "Open QR Check-In")</li>
+        <li><strong>Driver enters plate</strong> "AA 12345" on <code>/driver/checkin-confirm</code> → clicks "Confirm Check-In" → sees "Waiting for operator approval..."</li>
+        <li><strong>Operator sees</strong> the pending request in "Pending QR Check-In Requests" → clicks "Approve" → green gate flash appears</li>
+        <li><strong>Driver sees</strong> approval badge, goes to <code>/driver/home</code> → sees "Active Parking Sessions" with plate AA 12345</li>
+      </ol>
+
+      <h3>Alternative: Booking → Check-In (Manual Walk-In)</h3>
+      <ol>
+        <li><strong>Driver goes to <code>/driver/home</code></strong> → selects parking, enters plate "BB 67890", sets start/end times → clicks "Reserve &amp; Pay 20.00 ETB"</li>
+        <li><strong>Driver sees</strong> reservation confirmation with spot ID, reservation code</li>
+        <li><strong>Operator goes to <code>/operator/home</code></strong> → "Manual Vehicle Check-In" → enters plate "BB 67890" (or reservation code) → clicks "Confirm Gate Access"</li>
+        <li><strong>Operator sees</strong> green gate flash → session created</li>
+      </ol>
+
+      <h3>Payment &amp; Check-Out (Test Wallet Method)</h3>
+      <ol>
+        <li><strong>Driver goes to <code>/driver/home</code></strong> → sees "Active Parking Sessions" with their plate</li>
+        <li>Clicks <strong>"Quick Wallet Pay &amp; Checkout"</strong> → confirms → receipt modal shows with duration, tax, amount, remaining balance, and animated gate unlock</li>
+        <li>Wallet balance is deducted. Session ends. Slot frees up.</li>
+      </ol>
+
+      <h3>Payment &amp; Check-Out (Test Manual Method)</h3>
+      <ol>
+        <li><strong>Driver books &amp; checks in</strong> another vehicle (e.g., "CC 13579")</li>
+        <li>Goes to <code>/driver/home</code> → clicks "Manual Bank/Phone Checkout" → selects method, enters reference code → submits</li>
+        <li><strong>Operator sees</strong> pending payment in "Pending Manual Payments Queue" → clicks "Confirm" → green gate flash</li>
+        <li>Session completes, payment recorded with commission split</li>
+      </ol>
+
+      <h3>Test Owner Deactivation (Admin)</h3>
+      <ol>
+        <li><strong>Admin</strong> in <code>/admin/home</code> → scrolls to "Owner Lifecycle Controls" → clicks "Deactivate Owner"</li>
+        <li>If there are active sessions or reserved bookings, it will block with an error message</li>
+        <li>Once all sessions/expired, deactivation succeeds: all that owner's parkings &amp; operators become inactive</li>
+        <li><strong>Owner tries to log in</strong> → app forces sign-out because status is not "active"</li>
+        <li><strong>Admin clicks "Reactivate Owner"</strong> → restores everything to pre-archive state</li>
+      </ol>
+
+      <div class="recap">
+        <h4>Complete ✓</h4>
+        <p>You've tested: Signup, Booking, QR Check-In, Operator Check-In Approval, Wallet Self-Checkout, Manual Payment Submission &amp; Confirmation, Wallet Top-Up, and Owner Lifecycle Management.</p>
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>
