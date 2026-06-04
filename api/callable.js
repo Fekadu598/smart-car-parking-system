@@ -2,8 +2,6 @@ const admin = require("firebase-admin");
 const { FieldValue, Timestamp } = require("firebase-admin/firestore");
 
 
-
-
 // Initialize Firebase Admin
 // In emulator: uses service account key if available, otherwise uses default credentials
 // In production: uses default credentials automatically
@@ -29,24 +27,7 @@ class FunctionError extends Error {
   }
 }
 
-async function requireRole(auth, expectedRole) {
-  if (!auth?.uid) {
-    throw new FunctionError("unauthenticated", "Authentication required.");
-  }
-  const profile = await getUserProfile(auth.uid);
-  if (!profile) throw new FunctionError("failed-precondition", "User profile not found.");
-  if (profile.status && profile.status !== "active") {
-    throw new FunctionError("permission-denied", "User is not active.");
-  }
-  if (profile.role !== expectedRole) {
-    throw new FunctionError("permission-denied", `Required role: ${expectedRole}`);
-  }
-  return profile;
-}
 
-
-const REGION = "us-central1";
-const CALLABLE_OPTIONS = { region: REGION, cors: true };
 const BOOKING_TTL_MINUTES = 15;
 const PLATFORM_COMMISSION_RATE = 0.1;
 const FLAT_HOURLY_RATE = 50;
@@ -190,6 +171,21 @@ function ensureParkingInvariant(parking) {
 async function getUserProfile(uid) {
   const snap = await db.collection("users").doc(uid).get();
   return snap.exists ? snap.data() : null;
+}
+
+async function requireRole(auth, expectedRole) {
+  if (!auth?.uid) {
+    throw new FunctionError("unauthenticated", "Authentication required.");
+  }
+  const profile = await getUserProfile(auth.uid);
+  if (!profile) throw new FunctionError("failed-precondition", "User profile not found.");
+  if (profile.status && profile.status !== "active") {
+    throw new FunctionError("permission-denied", "User is not active.");
+  }
+  if (profile.role !== expectedRole) {
+    throw new FunctionError("permission-denied", `Required role: ${expectedRole}`);
+  }
+  return profile;
 }
 
 async function assertOperatorAssigned(uid, parkingId) {
@@ -514,7 +510,7 @@ async function listPendingPaymentsForOperator(data, auth) {
   }));
 
   return { parkingId, pendingPayments: pending };
-});
+}
 
 async function listPendingPaymentsForDriver(data, auth) {
   const actorUid = auth?.uid;
@@ -538,7 +534,7 @@ async function listPendingPaymentsForDriver(data, auth) {
   }));
 
   return { pendingPayments: pending };
-});
+}
 
 async function getPendingPaymentForSession(data, auth) {
   const actorUid = auth?.uid;
@@ -583,7 +579,7 @@ async function getPendingPaymentForSession(data, auth) {
       submittedAtMs: parseTimestampMs(payload.submittedAt),
     },
   };
-});
+}
 
 async function allocateSpot(parkingId, startTimeMs, endTimeMs, slotCapacity) {
   const capacity = toNumber(slotCapacity, 10);
@@ -769,61 +765,9 @@ async function createBooking(data, auth) {
     feeCharged: reservationFee,
     remainingBalance: newBalance
   };
-});
+}
 
-exports.expireBookings = onSchedule(
-  { region: REGION, schedule: "every 5 minutes", timeZone: "Africa/Nairobi" },
-  async () => {
-    const now = ts();
-    const snapshot = await db
-      .collection("bookings")
-      .where("status", "==", "reserved")
-      .where("expiresAt", "<=", now)
-      .limit(200)
-      .get();
-
-    let expiredCount = 0;
-    for (const docSnap of snapshot.docs) {
-      const bookingRef = docSnap.ref;
-      const booking = docSnap.data();
-      const parkingRef = db.collection("parkings").doc(booking.parkingId);
-
-      await db.runTransaction(async (tx) => {
-        const freshBooking = await tx.get(bookingRef);
-        if (!freshBooking.exists || freshBooking.data().status !== "reserved") return;
-        const parkingSnap = await tx.get(parkingRef);
-        if (!parkingSnap.exists) return;
-
-        const driverId = booking.driverId;
-        const userRef = driverId ? db.collection("users").doc(driverId) : null;
-        let freshUser = null;
-        if (userRef) {
-          freshUser = await tx.get(userRef);
-        }
-
-        tx.update(bookingRef, { status: "expired", updatedAt: ts() });
-        tx.update(parkingRef, {
-          reservedSlots: FieldValue.increment(-1),
-          availableSlots: FieldValue.increment(1),
-          updatedAt: ts(),
-        });
-
-        if (userRef && freshUser && freshUser.exists) {
-          const currentBal = toNumber(freshUser.data().walletBalance, 100.00);
-          const fee = toNumber(booking.reservationFee, 20.00);
-          tx.update(userRef, {
-            walletBalance: roundMoney(currentBal - fee),
-            updatedAt: ts()
-          });
-        }
-      });
-      expiredCount += 1;
-    }
-
-    logger.info("expireBookings completed", { expiredCount });
-    return null;
-  }
-);
+// expireBookings moved to api/cron.js (Vercel Cron Jobs)
 
 async function checkInVehicle(data, auth) {
   const actorUid = auth?.uid;
@@ -969,7 +913,7 @@ async function checkInVehicle(data, auth) {
     directions: getSpotDirections(assignedSpot, false),
     gateOpened: true 
   };
-});
+}
 
 async function checkOutVehicle(data, auth) {
   const actorUid = auth?.uid;
@@ -1122,7 +1066,7 @@ async function checkOutVehicle(data, auth) {
   });
 
   return responseData;
-});
+}
 
 async function submitManualPayment(data, auth) {
   const actorUid = auth?.uid;
@@ -1152,7 +1096,7 @@ async function submitManualPayment(data, auth) {
     amountDue: result.amountDue,
   });
   return result;
-});
+}
 
 async function driverCheckOutVehicle(data, auth) {
   const actorUid = auth?.uid;
@@ -1297,7 +1241,7 @@ async function driverCheckOutVehicle(data, auth) {
   });
 
   return responseData;
-});
+}
 
 async function topUpWallet(data, auth) {
   const actorUid = auth?.uid;
@@ -1335,7 +1279,7 @@ async function topUpWallet(data, auth) {
     amountAdded: amount,
     newBalance
   };
-});
+}
 
 async function expireBookingsManual(data, auth) {
   const now = ts();
@@ -1385,7 +1329,7 @@ async function expireBookingsManual(data, auth) {
     }
 
     return { expiredCount };
-});
+}
 
 async function confirmManualPayment(data, auth) {
   const actorUid = auth?.uid;
@@ -1530,7 +1474,7 @@ async function confirmManualPayment(data, auth) {
   });
 
   return responseData;
-});
+}
 
 async function rejectManualPayment(data, auth) {
   const actorUid = auth?.uid;
@@ -1586,7 +1530,7 @@ async function rejectManualPayment(data, auth) {
     reason,
   });
   return responseData;
-});
+}
 
 async function getAdminAnalytics(data, auth) {
   await requireRole(auth, "admin");
@@ -1730,7 +1674,7 @@ async function getAdminAnalytics(data, auth) {
     topParkings: Object.values(parkingsAgg).sort((a, b) => b.grossAmount - a.grossAmount).slice(0, 10),
     paymentsTable,
   };
-});
+}
 
 async function getOwnerAnalytics(data, auth) {
   const ownerProfile = await requireRole(auth, "owner");
@@ -1920,7 +1864,7 @@ async function getOwnerAnalytics(data, auth) {
       hourlyRate: toNumber(parking.hourlyRate, FLAT_HOURLY_RATE),
     })),
   };
-});
+}
 
 async function createOwnerAccount(data, auth) {
   const actorUid = auth?.uid;
@@ -1995,7 +1939,7 @@ async function createOwnerAccount(data, auth) {
 
   await writeAuditLog("CREATE_OWNER_ACCOUNT", actorUid, null, { ownerId, ownerUid, email });
   return { ownerId, userId: ownerUid, email };
-});
+}
 
 async function adminArchiveOwner(data, auth) {
   const actorUid = auth?.uid;
@@ -2152,7 +2096,7 @@ async function adminArchiveOwner(data, auth) {
     parkingsAffected: parkings.length,
     operatorsAffected: operators.length,
   };
-});
+}
 
 async function adminRestoreOwner(data, auth) {
   const actorUid = auth?.uid;
@@ -2279,7 +2223,7 @@ async function adminRestoreOwner(data, auth) {
     restoredParkings: parkingsSnap.size,
     restoredOperators: operatorsSnap.size,
   };
-});
+}
 
 async function createParkingCheckInToken(data, auth) {
   const actorUid = auth?.uid;
@@ -2310,7 +2254,7 @@ async function createParkingCheckInToken(data, auth) {
 
   await writeAuditLog("CREATE_PARKING_CHECKIN_TOKEN", actorUid, parkingId, { tokenId: token });
   return { tokenId: token, parkingId, expiresAtMs: now + QR_TOKEN_TTL_MS, deepLink };
-});
+}
 
 async function confirmCheckInFromQr(data, auth) {
   const actorUid = auth?.uid;
@@ -2469,7 +2413,7 @@ async function confirmCheckInFromQr(data, auth) {
     plateNumber,
   });
   return responseData;
-});
+}
 
 async function approveCheckInRequest(data, auth) {
   const actorUid = auth?.uid;
@@ -2567,7 +2511,7 @@ async function approveCheckInRequest(data, auth) {
     sessionId: responseData?.sessionId || null,
   });
   return responseData;
-});
+}
 
 async function rejectCheckInRequest(data, auth) {
   const actorUid = auth?.uid;
@@ -2622,7 +2566,7 @@ async function rejectCheckInRequest(data, auth) {
 
   await writeAuditLog("REJECT_CHECKIN_REQUEST", actorUid, responseData?.parkingId, { requestId });
   return responseData;
-});
+}
 
 async function createOwnerProfile(data, auth) {
   const actorUid = auth?.uid;
@@ -2676,7 +2620,7 @@ async function createOwnerProfile(data, auth) {
 
   await writeAuditLog("CREATE_OWNER_PROFILE", actorUid, null, { ownerId, userId });
   return { ownerId, userId, status: "active" };
-});
+}
 
 async function upsertParking(data, auth) {
   const actorUid = auth?.uid;
@@ -2730,7 +2674,7 @@ async function upsertParking(data, auth) {
 
   await writeAuditLog("UPSERT_PARKING", actorUid, parkingRef.id, { ownerId });
   return { parkingId: parkingRef.id, status };
-});
+}
 
 async function assignOperatorToParking(data, auth) {
   const actorUid = auth?.uid;
@@ -2773,7 +2717,7 @@ async function assignOperatorToParking(data, auth) {
 
   await writeAuditLog("ASSIGN_OPERATOR_TO_PARKING", actorUid, parkingId, { operatorUid, assign });
   return { operatorUid, parkingId, assign };
-});
+}
 
 async function ownerCreateOperator(data, auth) {
   const actorUid = auth?.uid;
@@ -2787,7 +2731,7 @@ async function ownerCreateOperator(data, auth) {
   const fullName = String(data?.fullName || "").trim();
   const password = String(data?.password || "").trim();
   const phone = String(data?.phone || "").trim();
-  const assignedParkingIdsRaw = Array.isArray(data?.assignedParkingIds) ? request.data.assignedParkingIds : [];
+  const assignedParkingIdsRaw = Array.isArray(data?.assignedParkingIds) ? data.assignedParkingIds : [];
   const assignedParkingIds = [...new Set(assignedParkingIdsRaw.map((id) => String(id || "").trim()).filter(Boolean))];
 
   if (!email || !fullName || !password) {
@@ -2855,7 +2799,7 @@ async function ownerCreateOperator(data, auth) {
 
   await writeAuditLog("OWNER_CREATE_OPERATOR", actorUid, null, { operatorUid, ownerId, assignedParkingIds });
   return { operatorUid, ownerId, assignedParkingIds, status: "active" };
-});
+}
 
 async function ownerUpdateOperatorAssignments(data, auth) {
   const actorUid = auth?.uid;
@@ -2865,7 +2809,7 @@ async function ownerUpdateOperatorAssignments(data, auth) {
   await assertOwnerAccountActive(ownerId);
 
   const operatorUid = String(data?.operatorUid || "").trim();
-  const assignedParkingIdsRaw = Array.isArray(data?.assignedParkingIds) ? request.data.assignedParkingIds : [];
+  const assignedParkingIdsRaw = Array.isArray(data?.assignedParkingIds) ? data.assignedParkingIds : [];
   const assignedParkingIds = [...new Set(assignedParkingIdsRaw.map((id) => String(id || "").trim()).filter(Boolean))];
 
   if (!operatorUid) throw new FunctionError("invalid-argument", "operatorUid is required.");
@@ -2895,7 +2839,7 @@ async function ownerUpdateOperatorAssignments(data, auth) {
 
   await writeAuditLog("OWNER_UPDATE_OPERATOR_ASSIGNMENTS", actorUid, null, { operatorUid, ownerId, assignedParkingIds });
   return { operatorUid, assignedParkingIds };
-});
+}
 
 async function ownerSetOperatorStatus(data, auth) {
   const actorUid = auth?.uid;
@@ -2929,7 +2873,7 @@ async function ownerSetOperatorStatus(data, auth) {
 
   await writeAuditLog("OWNER_SET_OPERATOR_STATUS", actorUid, null, { operatorUid, ownerId, status });
   return { operatorUid, status };
-});
+}
 
 async function ownerUpdatePaymentDetails(data, auth) {
   const actorUid = auth?.uid;
@@ -2976,7 +2920,7 @@ async function ownerUpdatePaymentDetails(data, auth) {
     bankAccountNumber: data?.bankAccountNumber !== undefined ? bankAccountNumber : null,
     updatedAtMs: now,
   };
-});
+}
 
 async function getParkingPaymentDetails(data, auth) {
   const actorUid = auth?.uid;
@@ -3033,7 +2977,8 @@ async function getParkingPaymentDetails(data, auth) {
     phone: String(owner.phone || "").trim(),
     bankAccountNumber: String(owner.bankAccountNumber || "").trim(),
   };
-});
+}
+
 
 const handlers = {
   listPendingPaymentsForOperator,

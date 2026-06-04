@@ -4,7 +4,7 @@ const path = require("path");
 const sourcePath = path.resolve(__dirname, "../functions/index.js");
 const destPath = path.resolve(__dirname, "../api/callable.js");
 
-let src = fs.readFileSync(sourcePath, "utf8");
+let src = fs.readFileSync(sourcePath, "utf8").replace(/\r/g, "");
 
 // Remove firebase-functions imports
 src = src.replace(
@@ -19,6 +19,10 @@ src = src.replace(
   /const \{ logger \} = require\("firebase-functions\/v2"\);/g,
   ""
 );
+
+// Remove region and options constants
+src = src.replace(/const REGION = "us-central1";/, "");
+src = src.replace(/const CALLABLE_OPTIONS = \{ region: REGION, cors: true \};/, "");
 
 // Replace admin initialization
 const newInit = `if (!admin.apps.length) {
@@ -36,10 +40,88 @@ src = src.replace(
   newInit
 );
 
-// Add FunctionError class
+// Replace HttpsError with FunctionError
+src = src.replace(/new HttpsError\(/g, "new FunctionError(");
+
+// Remove the scheduled expireBookings
 src = src.replace(
-  "const db = admin.firestore();",
-  `const db = admin.firestore();
+  /exports\.expireBookings = onSchedule\([\s\S]*?return null;\s*\n\}\);\n/,
+  "// expireBookings moved to api/cron.js (Vercel Cron Jobs)\n"
+);
+
+// Now transform each onCall function
+const lines = src.split("\n");
+const result = [];
+const handlerNames = [];
+let i = 0;
+
+function countBraces(line) {
+  let d = 0, p = 0;
+  for (const ch of line) {
+    if (ch === '{') d++;
+    else if (ch === '}') d--;
+    else if (ch === '(') p++;
+    else if (ch === ')') p--;
+  }
+  return { d, p };
+}
+
+while (i < lines.length) {
+  const line = lines[i];
+  const fnMatch = line.match(/^exports\.(\w+) = onCall\(CALLABLE_OPTIONS,\s*async\s*\(request\)\s*=>\s*\{$/);
+  if (fnMatch) {
+    const fnName = fnMatch[1];
+    handlerNames.push(fnName);
+    result.push(`async function ${fnName}(data, auth) {`);
+    i++;
+
+    let braceDepth = 1;
+
+    while (i < lines.length && braceDepth > 0) {
+      const bodyLine = lines[i];
+      const { d, p } = countBraces(bodyLine);
+      braceDepth += d;
+
+      if (braceDepth === 0) {
+        const trimmed = bodyLine.trim();
+        if (trimmed === "});" || trimmed === "})") {
+          result.push("}");
+        } else if (trimmed.startsWith("});")) {
+          result.push(bodyLine.replace("});", "}"));
+        } else if (trimmed.startsWith("})")) {
+          result.push(bodyLine.replace("})", "}"));
+        } else {
+          result.push(bodyLine);
+        }
+      } else {
+        result.push(bodyLine);
+      }
+
+      i++;
+    }
+  } else {
+    result.push(line);
+    i++;
+  }
+}
+
+let transformed = result.join("\n");
+
+// Additional replacements
+transformed = transformed
+  .replace(/request\.auth\?\.uid/g, "auth?.uid")
+  .replace(/request\.data\?\./g, "data?.")
+  .replace(/request\.data\s*\|\|/g, "data ||")
+  .replace(/request\.data([^?_a-zA-Z0-9])/g, "data$1")
+  .replace(/auth\?\.uid \?\. \?/g, "auth?.uid")
+  .replace(/requireRole\(request,\s*/g, "requireRole(auth, ")
+  .replace(/request\.rawRequest\.get\("origin"\)/g, "WEB_APP_BASE_URL");
+
+// Fix: ensure WEB_APP_BASE_URL constant uses process.env
+// (already defined in original)
+
+// Add FunctionError class
+const classDef = `
 
 class FunctionError extends Error {
   constructor(code, message, details) {
@@ -49,112 +131,28 @@ class FunctionError extends Error {
     this.name = "FunctionError";
   }
 }
+`;
 
-function requireRole(auth, expectedRole) {
-  if (!auth?.uid) {
-    throw new FunctionError("unauthenticated", "Authentication required.");
-  }
-  return getUserProfile(auth.uid).then((profile) => {
-    if (!profile) throw new FunctionError("failed-precondition", "User profile not found.");
-    if (profile.status && profile.status !== "active") {
-      throw new FunctionError("permission-denied", "User is not active.");
-    }
-    if (profile.role !== expectedRole) {
-      throw new FunctionError("permission-denied", \`Required role: \${expectedRole}\`);
-    }
-    return profile;
-  });
-}
-`
+transformed = transformed.replace("const db = admin.firestore();", "const db = admin.firestore();" + classDef);
+
+// Remove the old context-based requireRole (it uses `context` param)
+transformed = transformed.replace(
+  /async function requireRole\(context, expectedRole\) \{[\s\S]*?^return profile;\s*\n\}/m,
+  ""
 );
 
-// Remove REGION constant but keep it if used elsewhere
-src = src.replace(/const REGION = "us-central1";\n/, "");
-src = src.replace(/const CALLABLE_OPTIONS = \{.*?\};\n/, "");
+// Replace the WEB_APP_BASE_URL definition to use process.env
+// Original: const WEB_APP_BASE_URL = (process.env.WEB_APP_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+// Already correct
 
-// Remove the scheduled expireBookings function
-src = src.replace(
-  /exports\.expireBookings = onSchedule\([\s\S]*?return null;\s*\n\}\);\n/,
-  "// expireBookings moved to api/cron.js\n"
-);
+// Clean up empty lines
+transformed = transformed.replace(/\n{4,}/g, "\n\n\n");
 
-// Replace all onCall exports
-// exports.FUNCTION_NAME = onCall(CALLABLE_OPTIONS, async (request) => {
-// becomes:
-// async function functionName(data, auth) {
-src = src.replace(
-  /exports\.(\w+) = onCall\(CALLABLE_OPTIONS,\s*async\s*\(request\)\s*=>\s*\{/g,
-  "async function $1(data, auth) {"
-);
-
-// Replace request.auth?.uid with auth?.uid
-src = src.replace(/request\.auth\?\.uid/g, "auth?.uid");
-
-// Replace request.data?. with data?.
-// But be careful not to replace "request.data" without ?.
-src = src.replace(/request\.data\?\./g, "data?.");
-
-// Replace request.data (without ?) - but only when request.data is used without ?
-// Actually, replace request.data at the start of expressions
-// request.data || -> data ||
-src = src.replace(/request\.data\s*\|\|/g, "data ||");
-// request.data } -> data }
-src = src.replace(/request\.data\}/g, "data}");
-// request.data \n -> data \n
-src = src.replace(/request\.data([^?._a-zA-Z0-9])/g, "data$1");
-
-// Replace new HttpsError( with new FunctionError(
-src = src.replace(/new HttpsError\(/g, "new FunctionError(");
-
-// Replace requireRole(request, with requireRole(auth,
-src = src.replace(/requireRole\(request,\s*/g, "requireRole(auth, ");
-
-// Replace request.data?.X patterns that were missed
-src = src.replace(/request\.data\?\./g, "data?.");
-
-// Replace request.rawRequest.get("origin")
-src = src.replace(
-  /request\.rawRequest\.get\("origin"\)/g,
-  'WEB_APP_BASE_URL'
-);
-
-// Remove old requireRole function definition since we replaced it
-// The old one takes "request" as first param, our new one takes "auth"
-// Keep the old one if it wasn't replaced - actually it was in the original
-// Let me check if we need to remove the old requireRole
-
-// Add the handler map and export at the end
+// Add handler map and export
 const handlerMap = `
+
 const handlers = {
-  listPendingPaymentsForOperator,
-  listPendingPaymentsForDriver,
-  getPendingPaymentForSession,
-  createBooking,
-  checkInVehicle,
-  checkOutVehicle,
-  submitManualPayment,
-  driverCheckOutVehicle,
-  topUpWallet,
-  expireBookingsManual,
-  confirmManualPayment,
-  rejectManualPayment,
-  getAdminAnalytics,
-  getOwnerAnalytics,
-  createOwnerAccount,
-  adminArchiveOwner,
-  adminRestoreOwner,
-  createParkingCheckInToken,
-  confirmCheckInFromQr,
-  approveCheckInRequest,
-  rejectCheckInRequest,
-  createOwnerProfile,
-  upsertParking,
-  assignOperatorToParking,
-  ownerCreateOperator,
-  ownerUpdateOperatorAssignments,
-  ownerSetOperatorStatus,
-  ownerUpdatePaymentDetails,
-  getParkingPaymentDetails,
+  ${handlerNames.join(",\n  ")},
 };
 
 module.exports = async function handler(req, res) {
@@ -206,7 +204,6 @@ module.exports = async function handler(req, res) {
 };
 `;
 
-src += handlerMap;
-
-fs.writeFileSync(destPath, src, "utf8");
+fs.writeFileSync(destPath, transformed + handlerMap, "utf8");
 console.log("Created api/callable.js - " + fs.statSync(destPath).size + " bytes");
+console.log("Handlers (" + handlerNames.length + "): " + handlerNames.join(", "));
